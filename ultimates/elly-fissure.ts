@@ -1,3 +1,4 @@
+
 import type { Strand, ActiveUltimate, StrandName, Vector, RelationshipMatrix } from '../types';
 import { ULTIMATE_CONFIG, RELATIONSHIP_MODIFIERS } from '../constants';
 import { RelationshipLevel } from '../types';
@@ -222,7 +223,7 @@ export const renderFissure = (
         
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(ultimate.position.x, ultimate.position.y, ultimate.radius - 10, 0, Math.PI * 2);
+        ctx.arc(ultimate.position.x, ultimate.position.y, Math.max(0, ultimate.radius - 10), 0, Math.PI * 2);
         ctx.fill();
     } else {
         // Expanding warning ring

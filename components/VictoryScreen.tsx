@@ -1,14 +1,28 @@
 import React from 'react';
-import type { Strand } from '../types';
+import type { Strand, Creature } from '../types';
 
 interface VictoryScreenProps {
-    winner: Strand | null;
+    winner: Strand | Creature | null;
     onReset: () => void;
     onViewReport: () => void;
 }
 
 export const VictoryScreen: React.FC<VictoryScreenProps> = ({ winner, onReset, onViewReport }) => {
-    const imageUrl = winner?.imageUrl ?? winner?.image?.src;
+    let imageUrl: string | undefined;
+    let name: string | undefined;
+
+    if (winner) {
+        if ('team' in winner) { // It's a Creature
+            const creature = winner as Creature;
+            imageUrl = creature.imageUrl ?? creature.image?.src;
+            name = creature.state?.name ?? creature.type;
+        } else { // It's a Strand
+            const strand = winner as Strand;
+            imageUrl = strand.image?.src;
+            name = strand.name;
+        }
+    }
+
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 overflow-hidden">
@@ -18,9 +32,9 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ winner, onReset, o
                 </h1>
                 {winner && (
                     <div className="my-6 flex flex-col items-center">
-                         {imageUrl && <img src={imageUrl} alt={winner.name} className="w-32 h-32 rounded-full border-4 border-yellow-400 shadow-lg"/>}
+                         {imageUrl && <img src={imageUrl} alt={name} className="w-32 h-32 rounded-full border-4 border-yellow-400 shadow-lg"/>}
                         <p className="text-3xl font-semibold mt-4">
-                            <span className="text-purple-300">{winner.name}</span> is the winner!
+                            <span className="text-purple-300">{name}</span> is the winner!
                         </p>
                     </div>
                 )}
@@ -34,12 +48,14 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ winner, onReset, o
                     >
                         Fight Again
                     </button>
-                    <button
-                        onClick={onViewReport}
-                        className="px-8 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg text-xl transition-transform transform hover:scale-105"
-                    >
-                        View Battle Report
-                    </button>
+                     {onViewReport && (
+                        <button
+                            onClick={onViewReport}
+                            className="px-8 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg text-xl transition-transform transform hover:scale-105"
+                        >
+                            View Battle Report
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

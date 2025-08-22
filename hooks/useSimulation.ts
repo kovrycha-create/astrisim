@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { Strand, Theme, LogEntry, StrandName, ParticleSystem, Particle, Vector, ActiveSpecialEvent, Anomaly, RelationshipMatrix, ExplosionEffect, BattleReportStats, FightHistoryData, GameMode, PlayerTool, PlayerWall, CombatTextEffect, CollisionVfx, ActiveJobEffect, SimulationStats, ActiveUltimate, GlobalEffect, TransientVfx, BoundaryType, AIAggression, FightSettings, CameraTarget } from '../types';
-import { STRAND_NAMES, STRAND_CONFIG, SCREEN_WIDTH, SCREEN_HEIGHT, RELATIONSHIP_MATRIX, ASSET_URLS, FIGHT_MODE_HEALTH, PLAYER_CONFIG, SPECIAL_EVENTS_CONFIG, ULTIMATE_CONFIG, STRAND_ULTIMATE_STATS, ANOMALY_CONFIG, SIMULATION_DEFAULTS } from '../constants';
-import { loadImage } from '../services/assetLoader';
+import type { Strand, Theme, LogEntry, StrandName, ParticleSystem, Particle, Vector, ActiveSpecialEvent, Anomaly, RelationshipMatrix, ExplosionEffect, BattleReportStats, FightHistoryData, GameMode, PlayerTool, PlayerWall, CombatTextEffect, CollisionVfx, ActiveJobEffect, SimulationStats, ActiveUltimate, GlobalEffect, TransientVfx, BoundaryType, AIAggression, FightSettings, CameraTarget, Creature, CreatureType } from '../types';
+import { STRAND_NAMES, STRAND_CONFIG, SCREEN_WIDTH, SCREEN_HEIGHT, RELATIONSHIP_MATRIX, ASSET_URLS, FIGHT_MODE_HEALTH, PLAYER_CONFIG, SPECIAL_EVENTS_CONFIG, ULTIMATE_CONFIG, STRAND_ULTIMATE_STATS, ANOMALY_CONFIG, SIMULATION_DEFAULTS, CREATURE_CONFIG } from '../constants';
+import { loadImage, loadCreatureImage } from '../services/assetLoader';
 import { getCrystalLore, getFightCommentary } from '../services/geminiService';
 import { runSimulationTick } from './simulationLogic';
+import { runCreatureSimulationTick } from './creatureSimulationLogic';
 import { ultimateTriggers, globalEffectTriggers } from '../ultimates';
 import { RelationshipLevel } from '../types';
 
@@ -33,6 +34,7 @@ const deepCopyStrands = (strandsToCopy: Strand[]): Strand[] => {
 
 export const useSimulation = () => {
     const [strands, setStrands] = useState<Strand[]>([]);
+    const [creatures, setCreatures] = useState<Creature[]>([]);
     const [jobEffects, setJobEffects] = useState<ActiveJobEffect[]>([]);
     const [specialEvents, setSpecialEvents] = useState<ActiveSpecialEvent[]>([]);
     const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
@@ -49,6 +51,7 @@ export const useSimulation = () => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [theme, setTheme] = useState<Theme>('cosmic');
     const [winner, setWinner] = useState<Strand | null>(null);
+    const [creatureWinner, setCreatureWinner] = useState<Creature | null>(null);
     const [isVictoryScreenVisible, setIsVictoryScreenVisible] = useState(false);
     const [suddenDeathEffectTime, setSuddenDeathEffectTime] = useState(0);
     const [screenFlash, setScreenFlash] = useState<{ endTime: number; color: string } | null>(null);
@@ -178,6 +181,7 @@ Recent Events:
         addLog("Fight mode deactivated.");
         setIsFightModeActive(false);
         setWinner(null);
+        setCreatureWinner(null);
         setIsVictoryScreenVisible(false);
         simulationStateRef.current.celebrationEndTime = 0;
         simulationStateRef.current.duelAttraction = false;
@@ -194,6 +198,7 @@ Recent Events:
         setFightDuration(0);
         setRelationshipMatrix(copyRelationshipMatrix(RELATIONSHIP_MATRIX));
         setStrands(originalStrandsRef.current);
+        setCreatures([]);
         setAiCommentary('');
         setIsAiThinking(false);
     }, [addLog]);
@@ -201,14 +206,20 @@ Recent Events:
     const setGameMode = useCallback((mode: GameMode) => {
         if (mode === gameMode) return;
 
-        if (mode === 'PLAYER' && isFightModeActive) {
+        if (isFightModeActive) {
             stopFight();
         }
-        if (mode === 'BOT') {
+        if (mode === 'BOT' || mode === 'CREATURE') {
             setStrands(prev => prev.map(s => ({...s, playerBuffs: []})));
             setPlayerAether(PLAYER_CONFIG.AETHER_MAX);
             setIsGravityAnchorActive(false);
             setPlayerWalls([]);
+        }
+        if (mode === 'CREATURE') {
+            setStrands([]);
+        } else {
+             setStrands(originalStrandsRef.current);
+             setCreatures([]);
         }
         setGameModeInternal(mode);
         addLog(`Switched to ${mode} mode.`);
@@ -299,8 +310,8 @@ Recent Events:
     }, [gameMode, playerAether, strands, addLog]);
 
     const startFight = useCallback((settings: FightSettings) => {
-        if (gameMode === 'PLAYER') {
-            addLog("Cannot start fight in Player Mode.");
+        if (gameMode === 'PLAYER' || gameMode === 'CREATURE') {
+            addLog("Cannot start strand fight in current mode.");
             return;
         }
         addLog("FIGHT MODE ACTIVATED!");
@@ -316,6 +327,7 @@ Recent Events:
         setFightDuration(0);
         simulationStateRef.current.lastHistoryCaptureTime = 0;
         setFightHistoryData([]);
+        setCreatures([]);
 
         // Handle relationships
         if (settings.disableRelationships) {
@@ -412,9 +424,107 @@ Recent Events:
 
     }, [addLog, gameMode, simulationSettings.combatStatMultiplier, fetchAiCommentary]);
 
+    const startCreatureFight = useCallback(async (teamA: CreatureType[], teamB: CreatureType[]) => {
+        addLog("CREATURE FIGHT MODE ACTIVATED!");
+        setGameModeInternal('CREATURE');
+        setIsFightModeActive(true);
+        setCreatureWinner(null);
+        setIsVictoryScreenVisible(false);
+        setJobEffects([]);
+        setCombatTextEffects([]);
+        setTransientVfx([]);
+        simulationStateRef.current.fightStartTime = Date.now();
+        setFightDuration(0);
+        setStrands([]);
+
+        const loadCreature = async (type: CreatureType, id: number, team: 'A' | 'B', position: Vector): Promise<Creature> => {
+            let image: HTMLImageElement | null = null;
+            let initialState: any = {};
+            let baseConfig: any = {};
+            let imageUrl: string | undefined;
+            let evolutionProgress: number | undefined;
+
+            if (type === 'NIT_LINE') {
+                const creatureConfig = CREATURE_CONFIG[type];
+                const stage1Config = creatureConfig.stages[1];
+                baseConfig = stage1Config;
+                imageUrl = stage1Config.imageUrl;
+                initialState = {
+                    name: stage1Config.name,
+                    isBuffering: false,
+                    debuffsAbsorbed: 0,
+                    successfulTethers: 0,
+                    successfulFractures: 0,
+                    recursionGauge: 0,
+                };
+                evolutionProgress = stage1Config.evolutionThresholdTime;
+            } else if (type === 'BLOOM_WILT') {
+                const creatureConfig = CREATURE_CONFIG[type];
+                baseConfig = creatureConfig.bloom;
+                imageUrl = baseConfig.imageUrl;
+                initialState = {
+                    name: baseConfig.name,
+                    verdantPressure: 0,
+                    hollowPressure: 0,
+                    lastStanceSwitch: 0,
+                };
+                evolutionProgress = undefined;
+            }
+
+            if (imageUrl) {
+                try {
+                    image = await loadCreatureImage(imageUrl);
+                } catch (e) {
+                    console.warn(`Could not load image for ${type} from ${imageUrl}`);
+                }
+            }
+
+            const baseCreature: Creature = {
+                id,
+                type,
+                team,
+                position,
+                velocity: { x: (Math.random() - 0.5) * 2, y: (Math.random() - 0.5) * 2 },
+                rotation: 0,
+                radius: baseConfig.radius,
+                size: baseConfig.size,
+                health: baseConfig.hp,
+                maxHealth: baseConfig.hp,
+                speed: baseConfig.speed,
+                isDefeated: false,
+                image,
+                imageUrl: imageUrl,
+                evolutionStage: type === 'NIT_LINE' ? 1 : undefined,
+                evolutionProgress: evolutionProgress,
+                stance: type === 'BLOOM_WILT' ? 'BLOOM' : undefined,
+                abilities: baseConfig.abilities.map((a: any) => ({...a, lastUsed: 0})),
+                debuffs: [],
+                state: initialState,
+            };
+
+            return baseCreature;
+        };
+        
+        const teamAPositions = [
+            { x: SCREEN_WIDTH * 0.2, y: SCREEN_HEIGHT * 0.5 },
+            { x: SCREEN_WIDTH * 0.2, y: SCREEN_HEIGHT * 0.3 },
+        ];
+        const teamBPositions = [
+            { x: SCREEN_WIDTH * 0.8, y: SCREEN_HEIGHT * 0.5 },
+            { x: SCREEN_WIDTH * 0.8, y: SCREEN_HEIGHT * 0.7 },
+        ];
+
+        const teamACreatures = await Promise.all(teamA.map((type, i) => loadCreature(type, 1000 + i, 'A', teamAPositions[i])));
+        const teamBCreatures = await Promise.all(teamB.map((type, i) => loadCreature(type, 2000 + i, 'B', teamBPositions[i])));
+
+        setCreatures([...teamACreatures, ...teamBCreatures]);
+
+    }, [addLog]);
+
     const resetFight = useCallback(() => {
         setIsVictoryScreenVisible(false);
         setWinner(null);
+        setCreatureWinner(null);
         // This will be handled by the UI now which opens the setup modal again.
         // We don't call startFight here anymore directly.
     }, []);
@@ -673,119 +783,166 @@ Recent Events:
             return;
         }
 
-        if (!isPaused && strands.length > 0) {
-            const prevStrands = strands;
-            const results = runSimulationTick({
-                strands,
-                jobEffects,
-                specialEvents,
-                anomalies,
-                explosionEffects,
-                combatTextEffects,
-                collisionVfx,
-                transientVfx,
-                playerWalls,
-                activeUltimates,
-                globalEffects,
-                activeStrandIndex,
-                isFightModeActive,
-                isVictoryScreenVisible,
-                winner,
-                battleReport,
-                historyData: fightHistoryData,
-                gameMode,
-                playerAether,
-                activePlayerTool,
-                isGravityAnchorActive,
-                mousePosition: mousePosition.current,
-                prevMousePosition: prevMousePosition.current,
-                relationshipMatrix,
-                particleSystem,
-                simulationState: simulationStateRef.current,
-                simulationStats,
-                screenFlash,
-                screenShake,
-                deltaTime,
-                simulationSettings,
-                isActionCamActive,
-            });
+        const shouldRun = !isPaused && (strands.length > 0 || creatures.length > 0);
 
-            // Apply all state updates returned from the logic function
-            setStrands(results.nextStrands);
-            setJobEffects(results.nextJobEffects);
-            setSpecialEvents(results.nextSpecialEvents);
-            setAnomalies(results.nextAnomalies);
-            setExplosionEffects(results.nextExplosionEffects);
-            setCombatTextEffects(results.nextCombatTextEffects);
-            setCollisionVfx(results.nextCollisionVfx);
-            setTransientVfx(results.nextTransientVfx);
-            setPlayerWalls(results.nextPlayerWalls);
-            setActiveUltimates(results.nextActiveUltimates);
-            setGlobalEffects(results.nextGlobalEffects);
-            setPlayerAether(results.nextPlayerAether);
-            setFightDuration(results.nextFightDuration);
-            setRelationshipMatrix(results.nextRelationshipMatrix);
-            setSimulationStats(results.nextSimulationStats);
-            setScreenFlash(results.nextScreenFlash);
-            setScreenShake(results.nextScreenShake);
-            
-            if (results.nextCameraTarget) {
-                cameraTarget.current = results.nextCameraTarget;
-            }
-            if (results.nextBattleReport) {
-                setBattleReport(results.nextBattleReport);
-            }
-             if (results.nextFightHistoryData) {
-                setFightHistoryData(results.nextFightHistoryData);
-            }
+        if (shouldRun) {
+            const adjustedDeltaTime = deltaTime * simulationSettings.globalSpeed;
 
-            if(results.newLogs.length > 0) {
-                results.newLogs.forEach(log => addLog(log));
-            }
+            if (gameMode === 'CREATURE') {
+                const creatureResults = runCreatureSimulationTick({
+                    creatures,
+                    jobEffects,
+                    combatTextEffects,
+                    transientVfx,
+                    deltaTime: adjustedDeltaTime,
+                    now,
+                });
+                setCreatures(creatureResults.nextCreatures);
+                setJobEffects(creatureResults.nextJobEffects);
+                setCombatTextEffects(creatureResults.nextCombatTextEffects);
+                setTransientVfx(creatureResults.nextTransientVfx);
+                setFightDuration((now - simulationStateRef.current.fightStartTime) / 1000);
 
-            // --- AI Commentary Triggers ---
-            if (isFightModeActive) {
-                // Check for newly defeated strands to trigger AI commentary
-                const newlyDefeated = results.nextStrands.filter(s => 
-                    s.isDefeated && !prevStrands.find(oldS => oldS.id === s.id && oldS.isDefeated)
-                );
-                if (newlyDefeated.length > 0) {
-                    const defeatLog = newlyDefeated.map(s => `${s.name} defeated by ${s.lastDamagedBy || 'unknown'}`).join(', ');
-                    fetchAiCommentary('event', defeatLog);
+                if (creatureResults.imageUpdates && creatureResults.imageUpdates.length > 0) {
+                    creatureResults.imageUpdates.forEach(update => {
+                        const { creatureId, newImageUrl } = update;
+                        loadCreatureImage(newImageUrl).then(newImage => {
+                            setCreatures(prevCreatures => prevCreatures.map(c => 
+                                c.id === creatureId ? { ...c, image: newImage, imageUrl: newImageUrl } : c
+                            ));
+                        }).catch(e => console.error(`Failed to load new creature image: ${e}`));
+                    });
                 }
 
-                // Check for battle milestones (e.g., half of combatants defeated)
-                const livingCount = results.nextStrands.filter(s => s.visible && !s.isDefeated).length;
-                const initialCount = simulationStateRef.current.initialCombatantCount;
-
-                if (initialCount > 0) {
-                    const livingRatio = livingCount / initialCount;
-                    const nextMilestone = simulationStateRef.current.commentaryMilestones[0];
-                    
-                    if (nextMilestone && livingRatio <= nextMilestone) {
-                        let contextMessage = '';
-                        if (nextMilestone === 0.75) contextMessage = "The first quarter of combatants have fallen.";
-                        if (nextMilestone === 0.50) contextMessage = "Half of the combatants have been eliminated. The fight enters a critical phase.";
-                        if (nextMilestone === 0.25) contextMessage = "Only a quarter of the combatants remain. The end is near.";
-                        
-                        fetchAiCommentary('update', contextMessage);
-                        simulationStateRef.current.commentaryMilestones.shift();
+                if(creatureResults.newLogs.length > 0) {
+                    creatureResults.newLogs.forEach(log => addLog(log));
+                }
+                if (creatureResults.winner !== undefined) {
+                    setCreatureWinner(creatureResults.winner);
+                    const livingCreatures = creatureResults.nextCreatures.filter(c => !c.isDefeated);
+                    if(livingCreatures.length <= 1) {
+                         if(creatureResults.winner) {
+                            addLog(`FIGHT OVER! ${creatureResults.winner.state.name || creatureResults.winner.type} wins!`);
+                        } else {
+                            addLog(`FIGHT OVER! It's a draw!`);
+                        }
+                        simulationStateRef.current.celebrationEndTime = now + 2000;
                     }
                 }
-            }
-            
-            if(results.newWinner !== undefined) {
-                setWinner(results.newWinner);
-                 if (results.newWinner) {
-                    setWinHistory(prev => [results.newWinner!.name, ...prev].slice(0, MAX_WIN_HISTORY));
-                }
-            }
-            if (results.shouldShowVictoryScreen) {
-                setIsVictoryScreenVisible(true);
-            }
+            } else {
+                const prevStrands = strands;
+                const results = runSimulationTick({
+                    strands,
+                    jobEffects,
+                    specialEvents,
+                    anomalies,
+                    explosionEffects,
+                    combatTextEffects,
+                    collisionVfx,
+                    transientVfx,
+                    playerWalls,
+                    activeUltimates,
+                    globalEffects,
+                    activeStrandIndex,
+                    isFightModeActive,
+                    isVictoryScreenVisible,
+                    winner,
+                    battleReport,
+                    historyData: fightHistoryData,
+                    gameMode,
+                    playerAether,
+                    activePlayerTool,
+                    isGravityAnchorActive,
+                    mousePosition: mousePosition.current,
+                    prevMousePosition: prevMousePosition.current,
+                    relationshipMatrix,
+                    particleSystem,
+                    simulationState: simulationStateRef.current,
+                    simulationStats,
+                    screenFlash,
+                    screenShake,
+                    deltaTime: adjustedDeltaTime,
+                    simulationSettings,
+                    isActionCamActive,
+                });
 
-            // Update mutable ref state
-            simulationStateRef.current = results.nextSimulationState;
+                // Apply all state updates returned from the logic function
+                setStrands(results.nextStrands);
+                setJobEffects(results.nextJobEffects);
+                setSpecialEvents(results.nextSpecialEvents);
+                setAnomalies(results.nextAnomalies);
+                setExplosionEffects(results.nextExplosionEffects);
+                setCombatTextEffects(results.nextCombatTextEffects);
+                setCollisionVfx(results.nextCollisionVfx);
+                setTransientVfx(results.nextTransientVfx);
+                setPlayerWalls(results.nextPlayerWalls);
+                setActiveUltimates(results.nextActiveUltimates);
+                setGlobalEffects(results.nextGlobalEffects);
+                setPlayerAether(results.nextPlayerAether);
+                setFightDuration(results.nextFightDuration);
+                setRelationshipMatrix(results.nextRelationshipMatrix);
+                setSimulationStats(results.nextSimulationStats);
+                setScreenFlash(results.nextScreenFlash);
+                setScreenShake(results.nextScreenShake);
+                
+                if (results.nextCameraTarget) {
+                    cameraTarget.current = results.nextCameraTarget;
+                }
+                if (results.nextBattleReport) {
+                    setBattleReport(results.nextBattleReport);
+                }
+                 if (results.nextFightHistoryData) {
+                    setFightHistoryData(results.nextFightHistoryData);
+                }
+
+                if(results.newLogs.length > 0) {
+                    results.newLogs.forEach(log => addLog(log));
+                }
+
+                // --- AI Commentary Triggers ---
+                if (isFightModeActive) {
+                    // Check for newly defeated strands to trigger AI commentary
+                    const newlyDefeated = results.nextStrands.filter(s => 
+                        s.isDefeated && !prevStrands.find(oldS => oldS.id === s.id && oldS.isDefeated)
+                    );
+                    if (newlyDefeated.length > 0) {
+                        const defeatLog = newlyDefeated.map(s => `${s.name} defeated by ${s.lastDamagedBy || 'unknown'}`).join(', ');
+                        fetchAiCommentary('event', defeatLog);
+                    }
+
+                    // Check for battle milestones (e.g., half of combatants defeated)
+                    const livingCount = results.nextStrands.filter(s => s.visible && !s.isDefeated).length;
+                    const initialCount = simulationStateRef.current.initialCombatantCount;
+
+                    if (initialCount > 0) {
+                        const livingRatio = livingCount / initialCount;
+                        const nextMilestone = simulationStateRef.current.commentaryMilestones[0];
+                        
+                        if (nextMilestone && livingRatio <= nextMilestone) {
+                            let contextMessage = '';
+                            if (nextMilestone === 0.75) contextMessage = "The first quarter of combatants have fallen.";
+                            if (nextMilestone === 0.50) contextMessage = "Half of the combatants have been eliminated. The fight enters a critical phase.";
+                            if (nextMilestone === 0.25) contextMessage = "Only a quarter of the combatants remain. The end is near.";
+                            
+                            fetchAiCommentary('update', contextMessage);
+                            simulationStateRef.current.commentaryMilestones.shift();
+                        }
+                    }
+                }
+                
+                if(results.newWinner !== undefined) {
+                    setWinner(results.newWinner);
+                     if (results.newWinner) {
+                        setWinHistory(prev => [results.newWinner!.name, ...prev].slice(0, MAX_WIN_HISTORY));
+                    }
+                }
+                if (results.shouldShowVictoryScreen) {
+                    setIsVictoryScreenVisible(true);
+                }
+
+                // Update mutable ref state
+                simulationStateRef.current = results.nextSimulationState;
+            }
         }
 
         prevMousePosition.current = mousePosition.current;
@@ -795,7 +952,7 @@ Recent Events:
         specialEvents, anomalies, explosionEffects, combatTextEffects, collisionVfx, transientVfx, playerWalls,
         activeUltimates, globalEffects, activeStrandIndex, isFightModeActive, battleReport, fightHistoryData, 
         gameMode, playerAether, activePlayerTool, isGravityAnchorActive, addLog, particleSystem, relationshipMatrix, simulationStats,
-        screenFlash, screenShake, simulationSettings, isActionCamActive, fetchAiCommentary
+        screenFlash, screenShake, simulationSettings, isActionCamActive, fetchAiCommentary, creatures
     ]);
 
     useEffect(() => {
@@ -810,6 +967,8 @@ Recent Events:
     return {
         strands,
         setStrands,
+        creatures,
+        creatureWinner,
         jobEffects,
         specialEvents,
         anomalies,
@@ -827,6 +986,7 @@ Recent Events:
         isFightModeActive,
         toggleFightMode,
         startFight,
+        startCreatureFight,
         stopFight,
         logs,
         addLog,

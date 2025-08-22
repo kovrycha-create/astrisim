@@ -1,4 +1,4 @@
-import type { ActiveUltimate, GlobalEffect, Strand, StrandName, Vector, TransientVfx } from '../types';
+import type { ActiveUltimate, GlobalEffect, Strand, StrandName, Vector, TransientVfx, ActiveJobEffect, Creature } from '../types';
 import * as lotur from './lotur-tranquility-nexus';
 import * as vitaris from './vitaris-vital-bloom';
 import * as elly from './elly-fissure';
@@ -14,6 +14,7 @@ import * as nectiv from './nectiv-unity-pulse';
 import * as memetic from './memetic-echo-storm';
 import * as dethapart from './dethapart-decree-of-null';
 import * as vfxRenderers from './vfx-renderers';
+import * as creatureVfx from './creature-vfx-renderers';
 
 export const ultimateTriggers = {
     'TRANQUILITY_NEXUS': lotur.triggerTranquilityNexus,
@@ -98,7 +99,17 @@ export const globalEffectRenderers = {
 export const transientVfxRenderers = {
     'CHARGE_SURGE': vfxRenderers.renderChargeGainEffect,
     'LOW_HP_ACTIVATION': vfxRenderers.renderLowHpActivation,
+    'EVOLUTION': creatureVfx.renderEvolution,
+    'STANCE_SWITCH': creatureVfx.renderStanceSwitch,
 };
+
+export const creatureVfxRenderers: { [key: string]: (ctx: CanvasRenderingContext2D, effect: ActiveJobEffect, entities: { creatures: Creature[], strands: Strand[] }, now: number) => void } = {
+    'WHISPER_BUFFER_FIELD': creatureVfx.renderWhisperBufferField,
+    'SYMPATHY_THREAD': creatureVfx.renderSympathyThread,
+    'VERDANT_PULSE': creatureVfx.renderVerdantPulse,
+    'EQUINOX_BURST': creatureVfx.renderEquinoxBurst,
+};
+
 
 export const healingInterceptors = {
     'CORRUPTION': voidrot.interceptHealing,

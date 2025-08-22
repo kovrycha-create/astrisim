@@ -1,7 +1,8 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { SimulationCanvas } from './components/SimulationCanvas';
 import { useSimulation } from './hooks/useSimulation';
-import type { Vector, Strand, FightSettings } from './types';
+import type { Vector, Strand, FightSettings, CreatureType } from './types';
 import { PlayerHUD } from './components/PlayerHUD';
 import { PLAYER_CONFIG } from './constants';
 
@@ -19,6 +20,8 @@ import { Logger } from './components/Logger';
 import { GlobalControlsPanel } from './components/GlobalControlsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { AICommentatorPanel } from './components/AICommentatorPanel';
+import { CreatureSetupModal } from './components/CreatureSetupModal';
+import { CreatureHUD } from './components/CreatureHUD';
 
 const App: React.FC = () => {
     const simulation = useSimulation();
@@ -31,7 +34,8 @@ const App: React.FC = () => {
         isDrawingWall, wallStartPos, isRelationshipOverlayVisible, relationshipMatrix,
         playerAether, setActivePlayerTool, simulationSettings, setSimulationSettings,
         isFocusModeActive, setIsFocusModeActive, focusedStrandId, setFocusedStrandId,
-        isActionCamActive, toggleActionCam, aiCommentary, isAiThinking
+        isActionCamActive, toggleActionCam, aiCommentary, isAiThinking,
+        creatures, creatureWinner
     } = simulation;
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -46,6 +50,7 @@ const App: React.FC = () => {
     const [isBattleReportVisible, setIsBattleReportVisible] = useState(false);
     const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
     const [isFightSetupModalOpen, setIsFightSetupModalOpen] = useState(false);
+    const [isCreatureSetupModalOpen, setIsCreatureSetupModalOpen] = useState(false);
     const wasPausedBeforeSettingsRef = useRef(false);
     
     // Draggable Panel State
@@ -71,19 +76,33 @@ const App: React.FC = () => {
     
     const handleResetFight = () => {
         setIsBattleReportVisible(false);
-        setIsFightSetupModalOpen(true);
+        if (gameMode === 'CREATURE') {
+            setIsCreatureSetupModalOpen(true);
+        } else {
+            setIsFightSetupModalOpen(true);
+        }
     };
 
     const handleStartFight = (settings: FightSettings) => {
         setIsFightSetupModalOpen(false);
         simulation.startFight(settings);
     };
+    
+    const handleStartCreatureFight = (teamA: CreatureType[], teamB: CreatureType[]) => {
+        setIsCreatureSetupModalOpen(false);
+        simulation.startCreatureFight(teamA, teamB);
+    };
+
 
     const handleFightToggle = () => {
         if (simulation.isFightModeActive) {
             simulation.stopFight();
         } else {
-            setIsFightSetupModalOpen(true);
+             if (gameMode === 'CREATURE') {
+                setIsCreatureSetupModalOpen(true);
+            } else {
+                setIsFightSetupModalOpen(true);
+            }
         }
     };
 
@@ -210,6 +229,7 @@ const App: React.FC = () => {
             <SimulationCanvas
                 ref={canvasRef}
                 strands={strands}
+                creatures={creatures}
                 jobEffects={jobEffects}
                 specialEvents={specialEvents}
                 anomalies={anomalies}
@@ -260,21 +280,31 @@ const App: React.FC = () => {
             </div>
 
             {/* Left Panel (Strand Manager) */}
-            <div className={`absolute top-4 left-4 bottom-4 w-[400px] z-20 transition-transform duration-300 ease-in-out ${panels.left ? 'translate-x-0' : '-translate-x-[420px]'}`}>
-                <ControlPanel
-                    strands={simulation.strands}
-                    onStrandUpdate={(name, updates) => simulation.setStrands(prev => prev.map(s => (s.name === name ? { ...s, ...updates } : s)))}
-                    onTriggerUltimate={simulation.triggerUltimate}
-                    onLearnMore={handleLearnMore}
-                    isFightModeActive={simulation.isFightModeActive}
-                    onStrandOrderChange={handleStrandOrderChange}
-                    isFocusModeActive={isFocusModeActive}
-                    onToggleFocusMode={handleToggleFocusMode}
-                    onSetFocusedStrand={handleSetFocusedStrand}
-                    isActionCamActive={isActionCamActive}
-                    onToggleActionCam={toggleActionCam}
-                />
+             <div className={`absolute top-4 left-4 bottom-4 w-[400px] z-20 transition-transform duration-300 ease-in-out ${panels.left ? 'translate-x-0' : '-translate-x-[420px]'}`}>
+                {gameMode === 'CREATURE' ? (
+                     <div className="h-full flex flex-col gap-4 bg-gray-900/80 backdrop-blur-lg text-white w-full shadow-2xl overflow-y-hidden animate-fade-in border-2 border-purple-500/20 rounded-lg p-4">
+                        <h1 className="text-3xl font-bold text-purple-300 tracking-wider text-center border-b-2 border-purple-500/20 pb-4">Creature Mode</h1>
+                        <div className="flex-grow flex items-center justify-center">
+                            <p className="text-gray-400 text-center">Creature controls and analytics will appear here.</p>
+                        </div>
+                    </div>
+                ) : (
+                    <ControlPanel
+                        strands={simulation.strands}
+                        onStrandUpdate={(name, updates) => simulation.setStrands(prev => prev.map(s => (s.name === name ? { ...s, ...updates } : s)))}
+                        onTriggerUltimate={simulation.triggerUltimate}
+                        onLearnMore={handleLearnMore}
+                        isFightModeActive={simulation.isFightModeActive}
+                        onStrandOrderChange={handleStrandOrderChange}
+                        isFocusModeActive={isFocusModeActive}
+                        onToggleFocusMode={handleToggleFocusMode}
+                        onSetFocusedStrand={handleSetFocusedStrand}
+                        isActionCamActive={isActionCamActive}
+                        onToggleActionCam={toggleActionCam}
+                    />
+                )}
             </div>
+
 
             {/* Draggable Global Controls Panel */}
             <div
@@ -306,7 +336,7 @@ const App: React.FC = () => {
 
             {/* Bottom Panel */}
             <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-[1000px] h-[300px] z-20 transition-transform duration-300 ease-in-out ${panels.bottom ? 'translate-y-0' : 'translate-y-[320px]'}`}>
-                {simulation.isFightModeActive && !isVictoryScreenVisible ? (
+                {simulation.isFightModeActive && !isVictoryScreenVisible && gameMode !== 'CREATURE' ? (
                     <div className="w-full h-full bg-black/70 backdrop-blur-md text-white shadow-2xl flex flex-col gap-4 border-2 border-purple-500/20 rounded-lg">
                         <RealtimeAnalytics
                             report={simulation.battleReport}
@@ -315,11 +345,11 @@ const App: React.FC = () => {
                             strands={simulation.strands}
                         />
                     </div>
-                ) : (
+                ) : gameMode !== 'CREATURE' ? (
                     <div className="p-4 h-full">
                         <WinTracker winHistory={simulation.winHistory} strands={simulation.strands} />
                     </div>
-                )}
+                ) : null }
             </div>
 
             {/* Panel Toggles */}
@@ -354,7 +384,7 @@ const App: React.FC = () => {
                 </button>
             </div>
             
-            {/* Player HUD - position dynamically based on bottom panel */}
+            {/* Player & Creature HUDs */}
             <div className={`absolute left-1/2 -translate-x-1/2 z-20 transition-all duration-300 ease-in-out ${panels.bottom ? 'bottom-[320px]' : 'bottom-4'}`}>
                 {gameMode === 'PLAYER' && (
                     <PlayerHUD
@@ -364,9 +394,17 @@ const App: React.FC = () => {
                         onToolChange={setActivePlayerTool}
                     />
                 )}
+                 {gameMode === 'CREATURE' && isFightActive && !isVictoryScreenVisible &&(
+                    <CreatureHUD creatures={creatures} />
+                )}
             </div>
             
             {/* Overlays */}
+             <CreatureSetupModal
+                isOpen={isCreatureSetupModalOpen}
+                onClose={() => setIsCreatureSetupModalOpen(false)}
+                onStartFight={handleStartCreatureFight}
+            />
             <FightSetupModal 
                 isOpen={isFightSetupModalOpen}
                 onClose={() => setIsFightSetupModalOpen(false)}
@@ -380,7 +418,7 @@ const App: React.FC = () => {
             />
             {isVictoryScreenVisible && (
                  <VictoryScreen 
-                    winner={winner} 
+                    winner={gameMode === 'CREATURE' ? creatureWinner : winner} 
                     onReset={handleResetFight} 
                     onViewReport={() => setIsBattleReportVisible(true)}
                 />

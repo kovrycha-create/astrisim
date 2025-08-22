@@ -1,11 +1,13 @@
+
 import React, { useRef, useEffect, forwardRef } from 'react';
-import type { Strand, Theme, ParticleSystem, ActiveSpecialEvent, ActiveJobEffect, Anomaly, Mood, Vector, ExplosionEffect, GameMode, PlayerTool, PlayerWall, RelationshipMatrix, CombatTextEffect, CollisionVfx, ActiveUltimate, GlobalEffect, TransientVfx, CameraTarget } from '../types';
+import type { Strand, Theme, ParticleSystem, ActiveSpecialEvent, ActiveJobEffect, Anomaly, Mood, Vector, ExplosionEffect, GameMode, PlayerTool, PlayerWall, RelationshipMatrix, CombatTextEffect, CollisionVfx, ActiveUltimate, GlobalEffect, TransientVfx, CameraTarget, Creature } from '../types';
 import { SCREEN_WIDTH, SCREEN_HEIGHT, PLAYER_CONFIG } from '../constants';
 import { RelationshipLevel } from '../types';
-import { ultimateRenderers, globalEffectRenderers, transientVfxRenderers } from '../ultimates';
+import { ultimateRenderers, globalEffectRenderers, transientVfxRenderers, creatureVfxRenderers } from '../ultimates';
 
 interface SimulationCanvasProps {
     strands: Strand[];
+    creatures: Creature[];
     specialEvents: ActiveSpecialEvent[];
     jobEffects: ActiveJobEffect[];
     anomalies: Anomaly[];
@@ -66,7 +68,7 @@ const initializeStars = () => {
 
 
 export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasProps>(({
-    strands, specialEvents, jobEffects, anomalies, explosionEffects, combatTextEffects, collisionVfx, transientVfx, playerWalls,
+    strands, creatures, specialEvents, jobEffects, anomalies, explosionEffects, combatTextEffects, collisionVfx, transientVfx, playerWalls,
     activeUltimates, globalEffects, activeStrandIndex, theme, particleSystem, onCanvasClick, winner,
     isVictoryScreenVisible, suddenDeathEffectTime, screenFlash, screenShake, gameMode, mousePosition,
     activePlayerTool, isGravityAnchorActive, isDrawingWall, wallStartPos,
@@ -153,7 +155,10 @@ export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasPr
                     targetY = focused.position.y;
                     targetZoom = 2.5;
                 }
+            } else if (gameMode === 'CREATURE' && creatures.length > 0) {
+                 targetZoom = 0.8;
             }
+
 
             // Lerp camera state for smooth transition
             const camera = cameraRef.current;
@@ -278,6 +283,11 @@ export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasPr
             jobEffects.forEach(effect => {
                 context.save();
                 const life = effect.life / effect.maxLife;
+                 if (creatureVfxRenderers[effect.type as keyof typeof creatureVfxRenderers]) {
+                    (creatureVfxRenderers[effect.type as keyof typeof creatureVfxRenderers] as any)(context, effect, { creatures, strands }, now);
+                    context.restore();
+                    return;
+                }
                 switch (effect.type) {
                     case 'RIPPLE':
                     case 'LIGHT_PULSE':
@@ -437,6 +447,32 @@ export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasPr
 
                 context.restore();
             });
+            
+            // Draw Creatures
+            creatures.forEach(creature => {
+                if (creature.isDefeated) return;
+                
+                context.save();
+                context.translate(creature.position.x, creature.position.y);
+                context.rotate(creature.rotation + Math.PI / 2); // Add PI/2 because sprites are usually facing up
+
+                if (creature.image) {
+                    context.drawImage(
+                        creature.image,
+                        -creature.size.width / 2,
+                        -creature.size.height / 2,
+                        creature.size.width,
+                        creature.size.height
+                    );
+                } else {
+                    // Fallback rendering
+                    context.fillStyle = creature.team === 'A' ? 'lightblue' : 'lightcoral';
+                    context.fillRect(-creature.size.width / 2, -creature.size.height / 2, creature.size.width, creature.size.height);
+                }
+
+                context.restore();
+            });
+
 
             // Draw player walls
             playerWalls.forEach(wall => {
@@ -469,7 +505,7 @@ export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasPr
              transientVfx.forEach(vfx => {
                 const renderer = transientVfxRenderers[vfx.type as keyof typeof transientVfxRenderers];
                 if (renderer) {
-                    const target = strands.find(s => s.id === vfx.targetId);
+                    const target = strands.find(s => s.id === vfx.targetId) || creatures.find(c => c.id === vfx.targetId);
                     if (target) {
                         (renderer as any)(context, target, vfx, now);
                     }

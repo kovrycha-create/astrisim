@@ -1,9 +1,53 @@
-export type GameMode = 'BOT' | 'PLAYER';
+
+export type GameMode = 'BOT' | 'PLAYER' | 'CREATURE';
 export type PlayerTool = 'REPEL' | 'CURRENT' | 'WALL';
 export type BoundaryType = 'BOUNCE' | 'WRAP';
 export type AIAggression = 'PASSIVE' | 'NORMAL' | 'AGGRESSIVE';
 
 export type FightModeType = 'NORMAL' | 'DOUBLE' | 'MIRROR' | 'DUEL';
+
+// Creature specific types
+export type CreatureType = 'NIT_LINE' | 'BLOOM_WILT';
+export type NitStage = 1 | 2 | 3 | 4;
+export type BloomWiltStance = 'BLOOM' | 'WILT';
+
+export interface Ability {
+    name: string;
+    cooldownDuration: number; // in ms
+    lastUsed: number; // timestamp
+}
+
+export interface Creature {
+    id: number;
+    type: CreatureType;
+    team: 'A' | 'B';
+    
+    // Core stats
+    position: Vector;
+    velocity: Vector;
+    rotation: number; // in radians
+    radius: number;
+    size: { width: number; height: number };
+    health: number;
+    maxHealth: number;
+    speed: number;
+    isDefeated: boolean;
+    
+    // Visuals
+    image?: HTMLImageElement | null;
+    imageUrl?: string;
+    
+    // Evolution / Stance
+    evolutionStage?: NitStage;
+    evolutionProgress?: number; // Time or actions
+    stance?: BloomWiltStance;
+    
+    // Abilities and State
+    abilities: Ability[];
+    debuffs: Debuff[];
+    state: any; // Creature-specific data like gauges, marks, etc.
+}
+
 
 export interface FightSettings {
     mode: FightModeType;
@@ -11,6 +55,10 @@ export interface FightSettings {
     mirrorStrand?: StrandName;
     duelStrands?: [StrandName | null, StrandName | null];
     duelAttraction?: boolean;
+    creatureSetup?: {
+        teamA: CreatureType[];
+        teamB: CreatureType[];
+    };
 }
 
 export interface CameraTarget {
@@ -52,7 +100,7 @@ export interface ActiveUltimate {
     };
 }
 
-export type TransientVfxType = 'CHARGE_SURGE' | 'LOW_HP_ACTIVATION';
+export type TransientVfxType = 'CHARGE_SURGE' | 'LOW_HP_ACTIVATION' | 'EVOLUTION' | 'STANCE_SWITCH';
 
 export interface TransientVfx {
     id: number;
@@ -81,9 +129,9 @@ export interface Vector {
 export type Mood = 'Neutral' | 'Calm' | 'Agitated' | 'Playful';
 
 export interface Debuff {
-    type: 'CORRUPTION' | 'MARK_OF_CLOSURE';
+    type: 'CORRUPTION' | 'MARK_OF_CLOSURE' | 'FRACTURE_MARK' | 'DECAY' | 'ROOT' | 'ECHO_DAMAGE' | 'STUN';
     endTime: number;
-    source: StrandName;
+    source: StrandName | CreatureType;
     [key: string]: any;
 }
 
@@ -181,7 +229,7 @@ export interface ActiveSpecialEvent {
     };
 }
 
-export type JobEffectType = 'RIPPLE' | 'EDGE_GLITCH' | 'ENERGY_TRAIL' | 'DREAM_DISTORTION' | 'GROUNDING_AURA' | 'LIGHT_PULSE' | 'VOID_MOTE' | 'GRAVITY_WELL' | 'JUDGEMENT_LINK' | 'EMPATHIC_LINK' | 'WEAVER_TETHER';
+export type JobEffectType = 'RIPPLE' | 'EDGE_GLITCH' | 'ENERGY_TRAIL' | 'DREAM_DISTORTION' | 'GROUNDING_AURA' | 'LIGHT_PULSE' | 'VOID_MOTE' | 'GRAVITY_WELL' | 'JUDGEMENT_LINK' | 'EMPATHIC_LINK' | 'WEAVER_TETHER' | 'WHISPER_BUFFER_FIELD' | 'HUSH_POOL' | 'SYMPATHY_THREAD' | 'FAULT_LINE' | 'TIME_BUBBLE' | 'VERDANT_PULSE' | 'GROWTH_ZONE' | 'VINE_WALL' | 'LIFE_FOUNTAIN' | 'DEATH_TRAIL' | 'DEATH_SIGIL' | 'ASH_GARDEN' | 'EQUINOX_BURST' | 'FORCED_SWITCH_VFX';
 
 export interface ActiveJobEffect {
     id: number;

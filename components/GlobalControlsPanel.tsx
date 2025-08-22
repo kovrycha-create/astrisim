@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Theme, GameMode } from '../types';
 import { PlayIcon, PauseIcon, SunIcon, MoonIcon, SparklesIcon, FightIcon, LinkIcon, MoveIcon, SettingsIcon } from './Icons';
@@ -45,9 +46,10 @@ export const GlobalControlsPanel: React.FC<GlobalControlsPanelProps> = ({
                 <div className="p-2 bg-black/20 rounded-lg">
                     <h4 className="text-xs text-gray-400 mb-2">Simulation State</h4>
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 p-1 bg-black/30 rounded-full">
-                            <button onClick={() => onGameModeChange('BOT')} className={`px-4 py-1 rounded-full text-sm ${gameMode === 'BOT' ? 'bg-purple-600' : 'hover:bg-white/20'}`}>Bot</button>
-                            <button onClick={() => onGameModeChange('PLAYER')} className={`px-4 py-1 rounded-full text-sm ${gameMode === 'PLAYER' ? 'bg-purple-600' : 'hover:bg-white/20'}`}>Player</button>
+                        <div className="flex items-center gap-1 p-1 bg-black/30 rounded-full">
+                            <button onClick={() => onGameModeChange('BOT')} className={`px-3 py-1 rounded-full text-sm ${gameMode === 'BOT' ? 'bg-purple-600' : 'hover:bg-white/20'}`}>Bot</button>
+                            <button onClick={() => onGameModeChange('PLAYER')} className={`px-3 py-1 rounded-full text-sm ${gameMode === 'PLAYER' ? 'bg-purple-600' : 'hover:bg-white/20'}`}>Player</button>
+                            <button onClick={() => onGameModeChange('CREATURE')} className={`px-3 py-1 rounded-full text-sm ${gameMode === 'CREATURE' ? 'bg-purple-600' : 'hover:bg-white/20'}`}>Creature</button>
                         </div>
                         <div className="flex items-center gap-2">
                             <span className={`px-2 py-1 text-sm rounded ${isPaused ? 'bg-red-500' : 'bg-green-500'}`}>
@@ -97,7 +99,7 @@ export const GlobalControlsPanel: React.FC<GlobalControlsPanelProps> = ({
                             <FightIcon />
                             {isFightModeActive ? 'Stop Fight' : 'Start Fight Mode'}
                         </button>
-                        {isFightModeActive && !isFightDisabled && (
+                        {isFightModeActive && !isFightDisabled && gameMode !== 'CREATURE' && (
                            <button
                                 onClick={onTriggerSuddenDeath}
                                 className="flex-shrink-0 px-3 py-2 text-sm font-bold rounded-lg transition-colors bg-orange-600 hover:bg-orange-700 text-white"

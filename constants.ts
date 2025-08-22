@@ -289,6 +289,93 @@ export const COLLISION_CONFIG = {
     VELOCITY_FACTOR: 2.5, // Multiplier for collision velocity
 };
 
+export const CREATURE_CONFIG = {
+    'NIT_LINE': {
+        stages: {
+            1: {
+                name: 'Nit',
+                imageUrl: 'https://astrisim.neocities.org/creatures/nit/nit_evolve-1.png',
+                hp: 800,
+                speed: 1.2,
+                radius: 68,
+                size: { width: 135, height: 135 },
+                abilities: [{ name: 'Whisper Buffer', cooldownDuration: 6000 }],
+                evolutionThresholdTime: 20,
+                evolutionThresholdDebuffs: 3,
+            },
+            2: {
+                name: 'Nitelink',
+                imageUrl: 'https://astrisim.neocities.org/creatures/nit/nit_evolve-2.png',
+                hp: 1200,
+                speed: 1.2,
+                radius: 79,
+                size: { width: 158, height: 158 },
+                abilities: [
+                    { name: 'Sympathy Thread', cooldownDuration: 7000 },
+                    { name: 'Position Swap', cooldownDuration: 10000 },
+                ],
+                evolutionThresholdTime: 50, // total time from start
+                evolutionThresholdTethers: 5,
+            },
+            3: {
+                name: 'Nitrift',
+                imageUrl: 'https://astrisim.neocities.org/creatures/nit/nit_evolve-3.png',
+                hp: 1800,
+                speed: 1.4,
+                radius: 90,
+                size: { width: 180, height: 180 },
+                abilities: [
+                    { name: 'Fault Line', cooldownDuration: 5000 },
+                    { name: 'Shatter Point', cooldownDuration: 4000 },
+                ],
+                evolutionThresholdTime: 100, // total time from start
+                evolutionThresholdFractures: 6,
+            },
+            4: {
+                name: 'Nit Prime',
+                imageUrl: 'https://astrisim.neocities.org/creatures/nit/nit_evolve-4.png',
+                hp: 2500,
+                speed: 1.6,
+                radius: 101,
+                size: { width: 203, height: 203 },
+                abilities: [
+                     { name: 'Echo Pattern', cooldownDuration: 3000 },
+                     { name: 'Temporal Shear', cooldownDuration: 8000 },
+                ],
+            },
+        }
+    },
+    'BLOOM_WILT': {
+        pressureSwitchCooldown: 15000,
+        bloom: {
+            name: 'Bloom',
+            imageUrl: 'https://astrisim.neocities.org/creatures/lifendeath/life.png',
+            hp: 1600,
+            speed: 1.0,
+            radius: 90,
+            size: { width: 191, height: 191 },
+            abilities: [
+                { name: 'Verdant Pulse', cooldownDuration: 5000 },
+                { name: 'Overgrowth Shot', cooldownDuration: 6000 },
+                { name: 'Life Fountain', cooldownDuration: 10000 },
+            ],
+        },
+        wilt: {
+            name: 'Wilt',
+            imageUrl: 'https://astrisim.neocities.org/creatures/lifendeath/death.png',
+            hp: 1600,
+            speed: 1.6,
+            radius: 90,
+            size: { width: 191, height: 191 },
+            abilities: [
+                { name: 'Entropy Touch', cooldownDuration: 5000 },
+                { name: 'Hollow Lance', cooldownDuration: 7000 },
+                { name: 'Inevitable End', cooldownDuration: 12000 },
+            ],
+        }
+    }
+};
+
 // Strand: { damageFactor, healFactor, storedPowerRate }
 // damage/heal factors are multipliers on base collision effect.
 // storedPowerRate is points per second.

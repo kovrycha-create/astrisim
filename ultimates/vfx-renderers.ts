@@ -1,3 +1,4 @@
+
 import type { Strand, TransientVfx } from '../types';
 
 export const renderChargeGainEffect = (
