@@ -1,9 +1,77 @@
 export type GameMode = 'BOT' | 'PLAYER';
 export type PlayerTool = 'REPEL' | 'CURRENT' | 'WALL';
+export type BoundaryType = 'BOUNCE' | 'WRAP';
+export type AIAggression = 'PASSIVE' | 'NORMAL' | 'AGGRESSIVE';
+
+export type FightModeType = 'NORMAL' | 'DOUBLE' | 'MIRROR' | 'DUEL';
+
+export interface FightSettings {
+    mode: FightModeType;
+    disableRelationships: boolean;
+    mirrorStrand?: StrandName;
+    duelStrands?: [StrandName | null, StrandName | null];
+    duelAttraction?: boolean;
+}
+
+export interface CameraTarget {
+    x: number;
+    y: number;
+    zoom: number;
+}
+
 
 export type StrandName = 
     | "lotŭr" | "Vitarîs" | "丂anxxui" | "Askänu" | "Virtuō" | "ℛadí" 
-    | "Dræmin'" | "Nectiv" | "DxD" | "Memetic" | "Elly" | "Cozmik" | "VOIDROT" | "Ðethapart";
+    | "Dræmin'" | "Nectiv" | "OptiX" | "Memetic" | "Elly" | "Cozmik" | "VOIDROT" | "Ðethapart";
+
+export type UltimateName = 
+    | 'TRANQUILITY_NEXUS' 
+    | 'VITAL_BLOOM'
+    | 'FISSURE'
+    | 'GRAVITATIONAL_COLLAPSE'
+    | 'REVELATION_FLARE'
+    | 'DUEL_ARENA'
+    | 'BEACON_OF_KNOWLEDGE'
+    | 'UNITY_PULSE'
+    | 'DECREE_OF_NULL';
+
+export interface ActiveUltimate {
+    id: number;
+    type: UltimateName;
+    sourceStrandId: number;
+    sourceStrandName: StrandName;
+    position: Vector;
+    life: number; // in seconds
+    maxLife: number; // in seconds
+    radius: number;
+    maxRadius: number;
+    color: string;
+    phase?: 'pull' | 'push'; // For multi-stage ultimates like Cozmik's
+    data: {
+        [key: string]: any;
+    };
+}
+
+export type TransientVfxType = 'CHARGE_SURGE' | 'LOW_HP_ACTIVATION';
+
+export interface TransientVfx {
+    id: number;
+    type: TransientVfxType;
+    targetId: number;
+    life: number;
+    maxLife: number;
+    data: {
+        [key: string]: any;
+    };
+}
+
+export interface GlobalEffect {
+    type: 'CORRUPTION' | 'EQUILIBRIUM_BURST' | 'EMPATHIC_RESONANCE' | 'DREAM_WEAVE' | 'ECHO_STORM';
+    endTime: number;
+    data: {
+        [key: string]: any;
+    };
+}
 
 export interface Vector {
     x: number;
@@ -11,6 +79,13 @@ export interface Vector {
 }
 
 export type Mood = 'Neutral' | 'Calm' | 'Agitated' | 'Playful';
+
+export interface Debuff {
+    type: 'CORRUPTION' | 'MARK_OF_CLOSURE';
+    endTime: number;
+    source: StrandName;
+    [key: string]: any;
+}
 
 export interface Strand {
     id: number;
@@ -25,27 +100,34 @@ export interface Strand {
     originalSpeed: number; // To properly handle dream weave swaps
     tempSpeedModifier: number;
     visible: boolean;
-    image: HTMLImageElement | null;
-    ultimateEnabled: boolean;
+    image?: HTMLImageElement | null;
+    imageUrl?: string;
     glow: number;
-    ultimateCharge: number; // 0-100
-    ultimateCooldown: number; // in seconds
-    maxUltimateCooldown: number;
-    temporaryState?: { // For Dream Weave
-        swapTargetId: number;
-    } | null;
-    jobState: { [key: string]: any }; // For idle/job behaviors
-    glowColor?: [number, number, number] | null; // For DxD's job
+    jobState: { 
+        [key: string]: any;
+        isChanneling?: boolean;
+        duelState?: {
+            phase: 'STALK' | 'ENGAGE' | 'REPOSITION';
+            phaseEndTime: number;
+        };
+    };
+    glowColor?: [number, number, number] | null; // For OptiX's job
     mood: Mood;
     moodEndTime: number;
     health: number;
     maxHealth: number;
     isDefeated: boolean;
+    isInLowHpState?: boolean;
     lastDamagedBy: StrandName | null;
-    debuffs?: { type: 'MARK_OF_CLOSURE'; endTime: number; }[];
     playerBuffs?: { type: 'FAVOR' | 'STASIS' | 'BURDEN'; endTime: number; }[];
+    tempBuffs?: { type: string; endTime: number; multiplier?: number; }[];
+    debuffs?: Debuff[];
     storedPower: number; // For collision ramp-up damage/heal
     mouseVelocity?: Vector; // For cosmic current
+    ultimateCharge: number;
+    maxUltimateCharge: number;
+    ultimateCooldown: number; // in seconds
+    temporaryState?: { [key: string]: any } | null;
 }
 
 export type Theme = 'day' | 'night' | 'cosmic';
@@ -85,46 +167,6 @@ export interface ParticleSystem {
     update: () => void;
 }
 
-export type UltimateType = 
-    | 'FISSURE' 
-    | 'VITAL_BLOOM' 
-    | 'REVELATION_FLARE'
-    | 'GRAVITATIONAL_COLLAPSE'
-    | 'EQUILIBRIUM_BURST'
-    | 'TRANQUILITY_NEXUS'
-    | 'BEACON_OF_KNOWLEDGE'
-    | 'UNITY_PULSE'
-    | 'DUEL_ARENA'
-    | 'EMPATHIC_RESONANCE_VISUAL'
-    | 'DECREE_OF_NULL'; // Visual only for a global effect
-
-export interface ActiveUltimate {
-    id: number;
-    type: UltimateType;
-    sourceStrandId: number;
-    sourceStrandName: StrandName;
-    position: Vector;
-    life: number;
-    maxLife: number;
-    radius: number;
-    maxRadius: number;
-    color: string;
-    phase?: 'pull' | 'push';
-    data?: {
-        participants?: number[]; // For DxD, Nectiv, Askanu
-        [key: string]: any;
-    };
-}
-
-// Global, timed effects that aren't tied to a specific location
-export interface GlobalEffect {
-    type: 'ECHO_STORM' | 'CORRUPTION' | 'EMPATHIC_RESONANCE' | 'DREAM_WEAVE';
-    endTime: number;
-    data?: {
-        swappedPair?: [number, number];
-    };
-}
-
 export type SpecialEventType = 'METEOR_SHOWER' | 'COLOR_SHIFT' | 'SPEED_BOOST_ZONE';
 
 export interface ActiveSpecialEvent {
@@ -139,7 +181,7 @@ export interface ActiveSpecialEvent {
     };
 }
 
-export type JobEffectType = 'RIPPLE' | 'EDGE_GLITCH';
+export type JobEffectType = 'RIPPLE' | 'EDGE_GLITCH' | 'ENERGY_TRAIL' | 'DREAM_DISTORTION' | 'GROUNDING_AURA' | 'LIGHT_PULSE' | 'VOID_MOTE' | 'GRAVITY_WELL' | 'JUDGEMENT_LINK' | 'EMPATHIC_LINK' | 'WEAVER_TETHER';
 
 export interface ActiveJobEffect {
     id: number;
@@ -189,22 +231,23 @@ export interface CollisionVfx {
     position: Vector;
     life: number;
     maxLife: number;
-    type: 'heal' | 'neutral' | 'damage' | 'crit';
+    type: 'heal' | 'neutral' | 'damage' | 'crit' | 'heal_blocked';
     intensity: number; // from 0 to 1
 }
 
 export interface BattleReportStats {
     strandId: number;
     name: StrandName;
-    image: HTMLImageElement | null;
+    image?: HTMLImageElement | null;
+    imageUrl?: string;
     damageDealt: number;
     damageTaken: number;
     healingDone: number;
     kills: number;
-    ultimatesUsed: number;
     timeSurvived: number;
     causeOfDeath: StrandName | 'survived' | 'draw' | 'environment';
     isWinner: boolean;
+    ultimatesUsed: number;
 }
 
 export interface StatSnapshot {
@@ -230,8 +273,8 @@ export interface PlayerWall {
 export interface SimulationStats {
     sessionStartTime: number;
     totalCollisions: number;
-    totalUltimatesUsed: Map<StrandName, number>;
     anomaliesCollected: number;
+    ultimatesUsed: Map<StrandName, number>;
     player: {
         aetherSpent: number;
         timeWithToolActive: Map<PlayerTool, number>;

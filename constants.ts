@@ -1,4 +1,4 @@
-import type { StrandName, RelationshipMatrix } from './types';
+import type { StrandName, RelationshipMatrix, BoundaryType, AIAggression } from './types';
 import { RelationshipLevel } from './types';
 
 export const SCREEN_WIDTH = 1920;
@@ -7,7 +7,7 @@ export const FIGHT_MODE_HEALTH = 1000;
 
 export const STRAND_NAMES: StrandName[] = [
     "lotŭr", "Vitarîs", "丂anxxui", "Askänu", "Virtuō", "ℛadí", "Dræmin'",
-    "Nectiv", "DxD", "Memetic", "Elly", "Cozmik", "VOIDROT", "Ðethapart"
+    "Nectiv", "OptiX", "Memetic", "Elly", "Cozmik", "VOIDROT", "Ðethapart"
 ];
 
 export const STRAND_CONFIG: Record<StrandName, { radius: number; color: [number, number, number] }> = {
@@ -19,7 +19,7 @@ export const STRAND_CONFIG: Record<StrandName, { radius: number; color: [number,
     "ℛadí": { radius: 43, color: [255, 255, 180] },
     "Dræmin'": { radius: 42, color: [200, 100, 255] },
     "Nectiv": { radius: 45, color: [255, 160, 0] },
-    "DxD": { radius: 48, color: [255, 50, 50] },
+    "OptiX": { radius: 48, color: [255, 50, 50] },
     "Memetic": { radius: 41, color: [255, 0, 255] },
     "Elly": { radius: 47, color: [0, 200, 0] },
     "Cozmik": { radius: 44, color: [180, 180, 255] },
@@ -28,47 +28,21 @@ export const STRAND_CONFIG: Record<StrandName, { radius: number; color: [number,
 };
 
 export const ASSET_URLS: Record<StrandName, { url: string; file: string }> = {
-  "lotŭr":   {"url": "https://defyx.icu/strands/lotur-mr.png",   "file": "lotur.png"},
-  "Vitarîs": {"url": "https://defyx.icu/strands/vitaris-mr.png", "file": "vitaris.png"},
-  "丂anxxui": {"url": "https://defyx.icu/strands/sanxxui-mr.png", "file": "sanxxui.png"},
-  "Askänu":  {"url": "https://defyx.icu/strands/askanu-mr.png",  "file": "askanu.png"},
-  "Virtuō":  {"url": "https://defyx.icu/strands/virtuo-mr.png",  "file": "virtuo.png"},
-  "ℛadí":    {"url": "https://defyx.icu/strands/rad-mr.png",    "file": "radi.png"},
-  "Dræmin'": {"url": "https://defyx.icu/strands/dr%C3%A6min'-mr.png", "file": "draemin.png"},
-  "Nectiv":  {"url": "https://defyx.icu/strands/nectiv-mr.png",  "file": "nectiv.png"},
-  "DxD":     {"url": "https://defyx.icu/strands/foro4-mr.png",     "file": "dxd.png"},
-  "Memetic": {"url": "https://defyx.icu/strands/memetic-mr.png", "file": "memetic.png"},
-  "Elly":    {"url": "https://defyx.icu/strands/elly-mr.png",    "file": "elly.png"},
-  "Cozmik":  {"url": "https://defyx.icu/strands/cozmik-mr.png",  "file": "cozmik.png"},
-  "VOIDROT": {"url": "https://defyx.icu/strands/voidrot-mr.png", "file": "voidrot.png"},
-  "Ðethapart": {"url": "https://defyx.icu/strands/dethapart-mr.png", "file": "dethapart.png"}
+  "lotŭr":   {"url": "https://defyx.icu/strands/lotur.png",   "file": "lotur.png"},
+  "Vitarîs": {"url": "https://defyx.icu/strands/vitaris.png", "file": "vitaris.png"},
+  "丂anxxui": {"url": "https://defyx.icu/strands/sanxxui.png", "file": "sanxxui.png"},
+  "Askänu":  {"url": "https://defyx.icu/strands/askanu.png",  "file": "askanu.png"},
+  "Virtuō":  {"url": "https://defyx.icu/strands/virtuo.png",  "file": "virtuo.png"},
+  "ℛadí":    {"url": "https://defyx.icu/strands/radi.png",    "file": "radi.png"},
+  "Dræmin'": {"url": "https://defyx.icu/strands/dr%C3%A6min'.png", "file": "draemin.png"},
+  "Nectiv":  {"url": "https://defyx.icu/strands/nectiv.png",  "file": "nectiv.png"},
+  "OptiX":     {"url": "https://defyx.icu/strands/optix.png",     "file": "optix.png"},
+  "Memetic": {"url": "https://defyx.icu/strands/memetic.png", "file": "memetic.png"},
+  "Elly":    {"url": "https://defyx.icu/strands/elly.png",    "file": "elly.png"},
+  "Cozmik":  {"url": "https://defyx.icu/strands/cozmik.png",  "file": "cozmik.png"},
+  "VOIDROT": {"url": "https://defyx.icu/strands/voidrot.png", "file": "voidrot.png"},
+  "Ðethapart": {"url": "https://defyx.icu/strands/dethapart.png", "file": "dethapart.png"}
 };
-
-export const ULTIMATE_COOLDOWN = 45; // seconds
-export const AI_ULTIMATE_CHANCE = 0.0005; // Chance per frame for an AI to use a ready ultimate
-
-export const ULTIMATE_CHARGE_VALUES = {
-    // Passive gains (per frame, adjusted by normalizedDelta)
-    PASSIVE_SLOW: 0.02,  // For Elly
-    PASSIVE_CALM: 0.03,  // For lotur
-    PASSIVE_RANDOM_CHUNK: 20, // For Draemin'
-    PASSIVE_RANDOM_CHANCE: 0.001,
-    
-    // State-based gains (per frame)
-    NEAR_EDGE: 0.05, // For VOIDROT
-    NEAR_FRIEND: 0.005, // For Sanxxui
-    HIGH_SPEED: 0.04, // For Vitaris
-    NEAR_ACTIVE_STRAND: 0.06, // For Askanu
-
-    // Event-based gains (on occurrence)
-    WALL_BOUNCE: 2.5,
-    ANY_COLLISION: 1.5,
-    FRIEND_COLLISION: 4.0,
-    ENEMY_COLLISION: 5.0,
-    ULTIMATE_USED_NEARBY: 15, // For Radi
-    ULTIMATE_ENDED: 20, // For Dethapart
-};
-
 
 export const SPECIAL_EVENTS_CONFIG = {
     MIN_INTERVAL: 15 * 1000, // 15 seconds
@@ -90,103 +64,18 @@ export const SPECIAL_EVENTS_CONFIG = {
     },
 };
 
-export const ULTIMATE_CONFIG = {
-    'Elly': { // Fissure
-        DURATION: 8,
-        MAX_RADIUS: 300,
-        SLOW_FACTOR: 0.4,
-        DAMAGE_PER_SECOND: 50,
-    },
-    'Vitarîs': { // Vital Bloom
-        DURATION: 7,
-        RADIUS: 250,
-        SPEED_BOOST: 1.5,
-        CHARGE_BOOST_RATE: ULTIMATE_CHARGE_VALUES.PASSIVE_SLOW * 25,
-        HEAL_PER_SECOND: 40,
-    },
-    'ℛadí': { // Revelation Flare
-        DURATION: 0.5,
-        RADIUS: 400,
-        CHARGE_GAIN: 35,
-        DAMAGE: 150,
-    },
-    'Cozmik': { // Gravitational Collapse
-        PULL_DURATION: 3,
-        PUSH_DURATION: 1,
-        RADIUS: 800,
-        PULL_STRENGTH: 0.15,
-        PUSH_STRENGTH: 15,
-        PUSH_DAMAGE: 250,
-    },
-    'Virtuō': { // Equilibrium Burst
-        DURATION: 1.0,
-        HEAL_PERCENT: 0.15, // 15% of max health
-    },
-    'Memetic': { // Echo Storm
-        DURATION: 4,
-        DAMAGE_CHANCE: 0.02,
-        DAMAGE_AMOUNT: 20,
-    },
-    'VOIDROT': { // Corruption
-        DURATION: 12,
-        DAMAGE_PER_SECOND: 15,
-    },
-    'lotŭr': { // Tranquility Nexus
-        DURATION: 10,
-        RADIUS: 280,
-        SLOW_FACTOR: 0.6,
-        HEAL_PER_SECOND: 25,
-    },
-    '丂anxxui': { // Empathic Resonance
-        DURATION: 8,
-    },
-    'Askänu': { // Beacon of Knowledge
-        DURATION: 7,
-        RADIUS: 350,
-        SYNC_STRENGTH: 0.05,
-    },
-    "Dræmin'": { // Dream Weave
-        DURATION: 10,
-        DAMAGE_PER_SECOND: 10,
-    },
-    'Nectiv': { // Unity Pulse
-        DURATION: 6,
-        RADIUS: 300,
-        PULL_STRENGTH: 0.08,
-        DAMAGE_PER_SECOND: 20,
-    },
-    'DxD': { // Duel Arena
-        DURATION: 12,
-        RADIUS: 250,
-        DAMAGE_BONUS: 1.5, // 50% bonus damage
-    },
-    'Ðethapart': { // Decree of Null
-        DURATION: 10, // Duration of the mark
-        RADIUS: 450,
-        DAMAGE: 100,
-        EXECUTE_THRESHOLD: 0.15, // 15% health
-    },
-};
-
 export const RELATIONSHIP_MODIFIERS = {
-    // Ultimate interactions (per second of effect)
-    ULTIMATE_HEAL_ALLY: 0.005,
-    ULTIMATE_SUPPORT_ALLY: 0.004,
-    ULTIMATE_DAMAGE_ENEMY: -0.002,
-    ULTIMATE_DAMAGE_FRIEND: -0.01, // Friendly fire hurts relationships more
-    ULTIMATE_DAMAGE_NEUTRAL: -0.001,
-
-    // One-time ultimate burst effects
-    ULTIMATE_BURST_HEAL_ALLY: 0.025,
-    ULTIMATE_BURST_DAMAGE_ENEMY: -0.01,
-    ULTIMATE_BURST_DAMAGE_FRIEND: -0.05,
-    ULTIMATE_BURST_DAMAGE_NEUTRAL: -0.005,
-
     // Collision interactions (per collision)
     COLLISION_HEAL_FRIEND: 0.001,
     COLLISION_DAMAGE_ENEMY: -0.0005,
     COLLISION_CRIT_ENEMY: -0.001,
     COLLISION_DAMAGE_NEUTRAL: -0.0001,
+    // Ultimate interactions (per second)
+    ULTIMATE_HEAL_ALLY: 0.005,
+    ULTIMATE_DAMAGE_ENEMY: -0.002,
+    ULTIMATE_SUPPORT_ALLY: 0.003,
+    // Ultimate interactions (instant)
+    ULTIMATE_BURST_DAMAGE_ENEMY: -0.05,
 };
 
 export const MOOD_CONFIG = {
@@ -204,7 +93,7 @@ export const ANOMALY_CONFIG = {
         SPAWN_CHANCE: 0.001, // per frame
         MAX_COUNT: 5,
         RADIUS: 15,
-        ULT_CHARGE_GAIN: 20,
+        ULT_CHARGE_GAIN: 25,
         SPEED_BOOST: {
             DURATION: 5000, // 5 seconds in ms
             FACTOR: 1.4,
@@ -221,20 +110,20 @@ export const ANOMALY_CONFIG = {
 const { Acquaintance, Friend, BestFriend, Ally, MortalEnemy } = RelationshipLevel;
 
 export const RELATIONSHIP_MATRIX: RelationshipMatrix = {
-    "lotŭr": { "Vitarîs": Ally, "丂anxxui": Friend, "Askänu": Ally, "Virtuō": Ally, "ℛadí": Ally, "Dræmin'": Acquaintance, "Nectiv": Friend, "DxD": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Ally, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
-    "Vitarîs": { "lotŭr": Ally, "丂anxxui": Friend, "Askänu": Ally, "Virtuō": Ally, "ℛadí": Ally, "Dræmin'": Acquaintance, "Nectiv": Friend, "DxD": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Ally, "VOIDROT": MortalEnemy, "Ðethapart": MortalEnemy },
-    "丂anxxui": { "lotŭr": Friend, "Vitarîs": Friend, "Askänu": Friend, "Virtuō": Ally, "ℛadí": Ally, "Dræmin'": Acquaintance, "Nectiv": Acquaintance, "DxD": Acquaintance, "Memetic": Friend, "Elly": Friend, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
-    "Askänu": { "lotŭr": Ally, "Vitarîs": Ally, "丂anxxui": Friend, "Virtuō": Ally, "ℛadí": Ally, "Dræmin'": Acquaintance, "Nectiv": Friend, "DxD": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
-    "Virtuō": { "lotŭr": Ally, "Vitarîs": Ally, "丂anxxui": Ally, "Askänu": Ally, "ℛadí": Ally, "Dræmin'": Acquaintance, "Nectiv": Friend, "DxD": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy, "Ðethapart": Ally },
-    "ℛadí": { "lotŭr": Ally, "Vitarîs": Ally, "丂anxxui": Ally, "Askänu": Ally, "Virtuō": Ally, "Dræmin'": BestFriend, "Nectiv": Friend, "DxD": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
-    "Dræmin'": { "lotŭr": Acquaintance, "Vitarîs": Acquaintance, "丂anxxui": Acquaintance, "Askänu": Acquaintance, "Virtuō": Acquaintance, "ℛadí": BestFriend, "Nectiv": Acquaintance, "DxD": Acquaintance, "Memetic": Friend, "Elly": Acquaintance, "Cozmik": Ally, "VOIDROT": Acquaintance, "Ðethapart": Friend },
-    "Nectiv": { "lotŭr": Friend, "Vitarîs": Friend, "丂anxxui": Acquaintance, "Askänu": Friend, "Virtuō": Friend, "ℛadí": Friend, "Dræmin'": Acquaintance, "DxD": Acquaintance, "Memetic": BestFriend, "Elly": Acquaintance, "Cozmik": Friend, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
-    "DxD": { "lotŭr": Acquaintance, "Vitarîs": Acquaintance, "丂anxxui": Acquaintance, "Askänu": Acquaintance, "Virtuō": Acquaintance, "ℛadí": Acquaintance, "Dræmin'": Acquaintance, "Nectiv": Acquaintance, "Memetic": Acquaintance, "Elly": Acquaintance, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
-    "Memetic": { "lotŭr": Acquaintance, "Vitarîs": Acquaintance, "丂anxxui": Friend, "Askänu": Acquaintance, "Virtuō": Acquaintance, "ℛadí": Acquaintance, "Dræmin'": Friend, "Nectiv": BestFriend, "DxD": Acquaintance, "Elly": Acquaintance, "Cozmik": Acquaintance, "VOIDROT": Ally, "Ðethapart": Acquaintance },
-    "Elly": { "lotŭr": Friend, "Vitarîs": Friend, "丂anxxui": Friend, "Askänu": Friend, "Virtuō": Friend, "ℛadí": Friend, "Dræmin'": Acquaintance, "Nectiv": Acquaintance, "DxD": Acquaintance, "Memetic": Acquaintance, "Cozmik": BestFriend, "VOIDROT": MortalEnemy, "Ðethapart": Friend },
-    "Cozmik": { "lotŭr": Ally, "Vitarîs": Ally, "丂anxxui": Acquaintance, "Askänu": Acquaintance, "Virtuō": Acquaintance, "ℛadí": Acquaintance, "Dræmin'": Ally, "Nectiv": Friend, "DxD": Acquaintance, "Memetic": Acquaintance, "Elly": BestFriend, "VOIDROT": Acquaintance, "Ðethapart": Acquaintance },
-    "VOIDROT": { "lotŭr": MortalEnemy, "Vitarîs": MortalEnemy, "丂anxxui": MortalEnemy, "Askänu": MortalEnemy, "Virtuō": MortalEnemy, "ℛadí": MortalEnemy, "Dræmin'": Acquaintance, "Nectiv": MortalEnemy, "DxD": MortalEnemy, "Memetic": Ally, "Elly": MortalEnemy, "Cozmik": Acquaintance, "Ðethapart": MortalEnemy },
-    "Ðethapart": { "lotŭr": Acquaintance, "Vitarîs": MortalEnemy, "丂anxxui": Acquaintance, "Askänu": Acquaintance, "Virtuō": Ally, "ℛadí": Acquaintance, "Dræmin'": Friend, "Nectiv": Acquaintance, "DxD": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy }
+    "lotŭr": { "Vitarîs": Ally, "丂anxxui": Friend, "Askänu": Ally, "Virtuō": Ally, "ℛadí": Ally, "Dræmin'": Acquaintance, "Nectiv": Friend, "OptiX": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Ally, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
+    "Vitarîs": { "lotŭr": Ally, "丂anxxui": Friend, "Askänu": Ally, "Virtuō": Ally, "ℛadí": Ally, "Dræmin'": Acquaintance, "Nectiv": Friend, "OptiX": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Ally, "VOIDROT": MortalEnemy, "Ðethapart": MortalEnemy },
+    "丂anxxui": { "lotŭr": Friend, "Vitarîs": Friend, "Askänu": Friend, "Virtuō": Ally, "ℛadí": Ally, "Dræmin'": Acquaintance, "Nectiv": Acquaintance, "OptiX": Acquaintance, "Memetic": Friend, "Elly": Friend, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
+    "Askänu": { "lotŭr": Ally, "Vitarîs": Ally, "丂anxxui": Friend, "Virtuō": Ally, "ℛadí": Ally, "Dræmin'": Acquaintance, "Nectiv": Friend, "OptiX": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
+    "Virtuō": { "lotŭr": Ally, "Vitarîs": Ally, "丂anxxui": Ally, "Askänu": Ally, "ℛadí": Ally, "Dræmin'": Acquaintance, "Nectiv": Friend, "OptiX": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy, "Ðethapart": Ally },
+    "ℛadí": { "lotŭr": Ally, "Vitarîs": Ally, "丂anxxui": Ally, "Askänu": Ally, "Virtuō": Ally, "Dræmin'": BestFriend, "Nectiv": Friend, "OptiX": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
+    "Dræmin'": { "lotŭr": Acquaintance, "Vitarîs": Acquaintance, "丂anxxui": Acquaintance, "Askänu": Acquaintance, "Virtuō": Acquaintance, "ℛadí": BestFriend, "Nectiv": Acquaintance, "OptiX": Acquaintance, "Memetic": Friend, "Elly": Acquaintance, "Cozmik": Ally, "VOIDROT": Acquaintance, "Ðethapart": Friend },
+    "Nectiv": { "lotŭr": Friend, "Vitarîs": Friend, "丂anxxui": Acquaintance, "Askänu": Friend, "Virtuō": Friend, "ℛadí": Friend, "Dræmin'": Acquaintance, "OptiX": Acquaintance, "Memetic": BestFriend, "Elly": Acquaintance, "Cozmik": Friend, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
+    "OptiX": { "lotŭr": Acquaintance, "Vitarîs": Acquaintance, "丂anxxui": Acquaintance, "Askänu": Acquaintance, "Virtuō": Acquaintance, "ℛadí": Acquaintance, "Dræmin'": Acquaintance, "Nectiv": Acquaintance, "Memetic": Acquaintance, "Elly": Acquaintance, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy, "Ðethapart": Acquaintance },
+    "Memetic": { "lotŭr": Acquaintance, "Vitarîs": Acquaintance, "丂anxxui": Friend, "Askänu": Acquaintance, "Virtuō": Acquaintance, "ℛadí": Acquaintance, "Dræmin'": Friend, "Nectiv": BestFriend, "OptiX": Acquaintance, "Elly": Acquaintance, "Cozmik": Acquaintance, "VOIDROT": Ally, "Ðethapart": Acquaintance },
+    "Elly": { "lotŭr": Friend, "Vitarîs": Friend, "丂anxxui": Friend, "Askänu": Friend, "Virtuō": Friend, "ℛadí": Friend, "Dræmin'": Acquaintance, "Nectiv": Acquaintance, "OptiX": Acquaintance, "Memetic": Acquaintance, "Cozmik": BestFriend, "VOIDROT": MortalEnemy, "Ðethapart": Friend },
+    "Cozmik": { "lotŭr": Ally, "Vitarîs": Ally, "丂anxxui": Acquaintance, "Askänu": Acquaintance, "Virtuō": Acquaintance, "ℛadí": Acquaintance, "Dræmin'": Ally, "Nectiv": Friend, "OptiX": Acquaintance, "Memetic": Acquaintance, "Elly": BestFriend, "VOIDROT": Acquaintance, "Ðethapart": Acquaintance },
+    "VOIDROT": { "lotŭr": MortalEnemy, "Vitarîs": MortalEnemy, "丂anxxui": MortalEnemy, "Askänu": MortalEnemy, "Virtuō": MortalEnemy, "ℛadí": MortalEnemy, "Dræmin'": Acquaintance, "Nectiv": MortalEnemy, "OptiX": MortalEnemy, "Memetic": Ally, "Elly": MortalEnemy, "Cozmik": Acquaintance, "Ðethapart": MortalEnemy },
+    "Ðethapart": { "lotŭr": Acquaintance, "Vitarîs": MortalEnemy, "丂anxxui": Acquaintance, "Askänu": Acquaintance, "Virtuō": Ally, "ℛadí": Acquaintance, "Dræmin'": Friend, "Nectiv": Acquaintance, "OptiX": Acquaintance, "Memetic": Acquaintance, "Elly": Friend, "Cozmik": Acquaintance, "VOIDROT": MortalEnemy }
 };
 
 export const PLAYER_CONFIG = {
@@ -258,7 +147,7 @@ export const PLAYER_CONFIG = {
     FAVOR: {
         COST: 30,
         DURATION: 10, // seconds
-        CHARGE_BONUS: 2, // bonus charge per second
+        CHARGE_BONUS: 2, // bonus ultimate charge per second
     },
     WALL_OF_LIGHT: {
         AETHER_COST_PER_PIXEL: 0.1,
@@ -274,6 +163,120 @@ export const PLAYER_CONFIG = {
         DURATION: 12, // seconds
         DAMAGE_MULTIPLIER: 1.3, // 30% increased damage
     },
+};
+
+export const BASE_ULTIMATE_CHARGE_RATE = 2.5; // points per second
+
+export const STRAND_ULTIMATE_STATS: Record<StrandName, { maxCharge: number; cooldown: number }> = {
+    "lotŭr":   { maxCharge: 100, cooldown: 15 },
+    "Vitarîs": { maxCharge: 100, cooldown: 12 },
+    "丂anxxui": { maxCharge: 100, cooldown: 15 },
+    "Askänu":  { maxCharge: 100, cooldown: 15 },
+    "Virtuō":  { maxCharge: 120, cooldown: 25 },
+    "ℛadí":    { maxCharge: 90,  cooldown: 8 },
+    "Dræmin'": { maxCharge: 110, cooldown: 18 },
+    "Nectiv":  { maxCharge: 100, cooldown: 15 },
+    "OptiX":     { maxCharge: 110, cooldown: 20 },
+    "Memetic": { maxCharge: 120, cooldown: 22 },
+    "Elly":    { maxCharge: 120, cooldown: 20 },
+    "Cozmik":  { maxCharge: 120, cooldown: 20 },
+    "VOIDROT": { maxCharge: 110, cooldown: 18 },
+    "Ðethapart": { maxCharge: 110, cooldown: 16 },
+};
+
+export const ULTIMATE_CONFIG: Record<StrandName, { NAME: string, [key: string]: any }> = {
+    "lotŭr": {
+        NAME: 'TRANQUILITY_NEXUS',
+        DURATION: 8, // seconds
+        RADIUS: 450, // pixels
+        HEAL_PER_SECOND: 25, // flat heal
+        SLOW_FACTOR: 0.4, // reduces speed to 40%
+    },
+    "Vitarîs": {
+        NAME: 'VITAL_BLOOM',
+        DURATION: 10,
+        RADIUS: 400,
+        SPEED_BOOST: 1.5,
+        SELF_SPEED_BOOST: 2.0,
+        CHARGE_BOOST_RATE: 5, // points per second
+        HEAL_PER_SECOND: 10,
+    },
+    "Elly": {
+        NAME: 'FISSURE',
+        DURATION: 12,
+        MAX_RADIUS: 350,
+        DAMAGE_PER_SECOND: 40,
+        SLOW_FACTOR: 0.3,
+    },
+    "Cozmik": {
+        NAME: 'GRAVITATIONAL_COLLAPSE',
+        PULL_DURATION: 3,
+        PUSH_DURATION: 0.5,
+        RADIUS: 500,
+        PULL_STRENGTH: 0.2,
+        PUSH_STRENGTH: 20,
+        PUSH_DAMAGE: 250,
+    },
+    "VOIDROT": {
+        NAME: 'CORRUPTION',
+        DURATION: 10,
+        DAMAGE_PER_SECOND: 15,
+        HEAL_BLOCK: true,
+    },
+    "ℛadí": {
+        NAME: 'REVELATION_FLARE',
+        DURATION: 1.5, // Visual effect duration
+        RADIUS: 600,
+        DAMAGE: 150,
+        CHARGE_GAIN: 35,
+    },
+    "Virtuō": {
+        NAME: 'EQUILIBRIUM_BURST',
+        DURATION: 1.5, // Visual effect duration
+    },
+    "OptiX": {
+        NAME: 'DUEL_ARENA',
+        DURATION: 10, // seconds
+        RADIUS: 300, // pixels
+        DAMAGE_BONUS: 1.5, // 50% extra damage
+    },
+    "丂anxxui": { 
+        NAME: 'EMPATHIC_RESONANCE',
+        DURATION: 10, // seconds
+    },
+    "Askänu": { 
+        NAME: 'BEACON_OF_KNOWLEDGE',
+        DURATION: 8,
+        RADIUS: 400,
+        SYNC_STRENGTH: 0.5,
+    },
+    "Dræmin'": {
+        NAME: 'DREAM_WEAVE',
+        DURATION: 7,
+        SWAP_DELAY: 3,
+        DAMAGE_PER_SECOND: 10,
+    },
+    "Nectiv": {
+        NAME: 'UNITY_PULSE',
+        DURATION: 6,
+        RADIUS: 350,
+        PULL_STRENGTH: 0.08,
+        DAMAGE_PER_SECOND: 20,
+    },
+    "Memetic": {
+        NAME: 'ECHO_STORM',
+        DURATION: 8,
+        DAMAGE_CHANCE: 0.05, // chance per frame per strand
+        ECHO_RADIUS: 100,
+        DAMAGE_AMOUNT: 15,
+    },
+    "Ðethapart": {
+        NAME: 'DECREE_OF_NULL',
+        DURATION: 10, // Mark duration
+        RADIUS: 700, // Cast range
+        DAMAGE: 100, // Initial hit damage
+        EXECUTE_THRESHOLD: 0.2, // 20% health
+    }
 };
 
 export const COLLISION_CONFIG = {
@@ -298,10 +301,38 @@ export const STRAND_COMBAT_STATS: Record<StrandName, { collisionDamageFactor: nu
     "ℛadí":    { collisionDamageFactor: 1.5, collisionHealFactor: 0.5, storedPowerRate: 1.5 },
     "Dræmin'": { collisionDamageFactor: 1.0, collisionHealFactor: 1.0, storedPowerRate: 2.0 },
     "Nectiv":  { collisionDamageFactor: 1.2, collisionHealFactor: 1.0, storedPowerRate: 2.0 },
-    "DxD":     { collisionDamageFactor: 2.2, collisionHealFactor: 0.1, storedPowerRate: 1.0 },
+    "OptiX":     { collisionDamageFactor: 2.2, collisionHealFactor: 0.1, storedPowerRate: 1.0 },
     "Memetic": { collisionDamageFactor: 0.8, collisionHealFactor: 0.8, storedPowerRate: 2.5 },
     "Elly":    { collisionDamageFactor: 1.0, collisionHealFactor: 1.0, storedPowerRate: 4.5 },
     "Cozmik":  { collisionDamageFactor: 1.8, collisionHealFactor: 0.2, storedPowerRate: 1.5 },
     "VOIDROT": { collisionDamageFactor: 2.5, collisionHealFactor: 0.1, storedPowerRate: 1.0 },
     "Ðethapart": { collisionDamageFactor: 1.9, collisionHealFactor: 0.1, storedPowerRate: 3.5 },
+};
+
+export const LOW_HP_THRESHOLDS: Record<StrandName, number> = {
+    "lotŭr": 0.25,   // Defensive, triggers early
+    "Vitarîs": 0.20, // Flees to survive
+    "丂anxxui": 0.22, // Seeks allies for protection
+    "Askänu": 0.18,  // Cautious, tries to avoid combat
+    "Virtuō": 0.15,  // Balanced, desperate power
+    "ℛadí": 0.15,    // Tries for a final burst of power
+    "Dræmin'": 0.20, // Becomes erratic and unpredictable
+    "Nectiv": 0.22,  // Huddles with friends
+    "OptiX": 0.15,     // Berserker, fights harder
+    "Memetic": 0.18, // Becomes chaotic
+    "Elly": 0.20,    // Takes a defensive stance
+    "Cozmik": 0.15,  // Desperate gravitational pull
+    "VOIDROT": 0.10, // Reckless aggression
+    "Ðethapart": 0.10, // Goes for a final kill
+};
+
+export const SIMULATION_DEFAULTS = {
+    globalSpeed: 1.0,
+    bounciness: 1.0,
+    friction: 0.99,
+    boundaryType: 'BOUNCE' as BoundaryType,
+    combatStatMultiplier: 1.0,
+    ultimateChargeMultiplier: 1.0,
+    aiAggression: 'NORMAL' as AIAggression,
+    disableLowHpBehaviors: false,
 };

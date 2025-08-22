@@ -1,18 +1,21 @@
 import React, { useRef, useEffect, forwardRef } from 'react';
-import type { Strand, Theme, ParticleSystem, ActiveUltimate, ActiveSpecialEvent, ActiveJobEffect, Anomaly, Mood, Vector, ExplosionEffect, GameMode, PlayerTool, PlayerWall, RelationshipMatrix, CombatTextEffect, CollisionVfx } from '../types';
+import type { Strand, Theme, ParticleSystem, ActiveSpecialEvent, ActiveJobEffect, Anomaly, Mood, Vector, ExplosionEffect, GameMode, PlayerTool, PlayerWall, RelationshipMatrix, CombatTextEffect, CollisionVfx, ActiveUltimate, GlobalEffect, TransientVfx, CameraTarget } from '../types';
 import { SCREEN_WIDTH, SCREEN_HEIGHT, PLAYER_CONFIG } from '../constants';
 import { RelationshipLevel } from '../types';
+import { ultimateRenderers, globalEffectRenderers, transientVfxRenderers } from '../ultimates';
 
 interface SimulationCanvasProps {
     strands: Strand[];
-    activeUltimates: ActiveUltimate[];
     specialEvents: ActiveSpecialEvent[];
     jobEffects: ActiveJobEffect[];
     anomalies: Anomaly[];
     explosionEffects: ExplosionEffect[];
     combatTextEffects: CombatTextEffect[];
     collisionVfx: CollisionVfx[];
+    transientVfx: TransientVfx[];
     playerWalls: PlayerWall[];
+    activeUltimates: ActiveUltimate[];
+    globalEffects: GlobalEffect[];
     activeStrandIndex: number;
     theme: Theme;
     particleSystem: ParticleSystem;
@@ -20,6 +23,8 @@ interface SimulationCanvasProps {
     winner: Strand | null;
     isVictoryScreenVisible: boolean;
     suddenDeathEffectTime: number;
+    screenFlash: { endTime: number; color: string } | null;
+    screenShake: { endTime: number; intensity: number } | null;
     gameMode: GameMode;
     mousePosition: Vector;
     activePlayerTool: PlayerTool;
@@ -28,6 +33,9 @@ interface SimulationCanvasProps {
     wallStartPos: Vector | null;
     isRelationshipOverlayVisible: boolean;
     relationshipMatrix: RelationshipMatrix;
+    focusedStrandId: number | null;
+    isActionCamActive?: boolean;
+    cameraTarget?: CameraTarget;
 }
 
 const THEME_COLORS = {
@@ -58,15 +66,16 @@ const initializeStars = () => {
 
 
 export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasProps>(({
-    strands, activeUltimates, specialEvents, jobEffects, anomalies, explosionEffects, combatTextEffects, collisionVfx, playerWalls,
-    activeStrandIndex, theme, particleSystem, onCanvasClick, winner,
-    isVictoryScreenVisible, suddenDeathEffectTime, gameMode, mousePosition,
+    strands, specialEvents, jobEffects, anomalies, explosionEffects, combatTextEffects, collisionVfx, transientVfx, playerWalls,
+    activeUltimates, globalEffects, activeStrandIndex, theme, particleSystem, onCanvasClick, winner,
+    isVictoryScreenVisible, suddenDeathEffectTime, screenFlash, screenShake, gameMode, mousePosition,
     activePlayerTool, isGravityAnchorActive, isDrawingWall, wallStartPos,
-    isRelationshipOverlayVisible, relationshipMatrix,
+    isRelationshipOverlayVisible, relationshipMatrix, focusedStrandId, isActionCamActive, cameraTarget
 }, ref) => {
     const internalCanvasRef = useRef<HTMLCanvasElement>(null);
     const canvasRef = ref || internalCanvasRef;
     const mouseTrailRef = useRef<Vector[]>([]);
+    const cameraRef = useRef({ x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT / 2, zoom: 1.0 });
 
      const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = (canvasRef as React.RefObject<HTMLCanvasElement>)?.current;
@@ -96,6 +105,15 @@ export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasPr
         const render = () => {
             context.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
             const now = Date.now();
+            
+            context.save();
+            
+            // Screen Shake Effect
+            if (screenShake && now < screenShake.endTime) {
+                const shakeX = (Math.random() - 0.5) * screenShake.intensity;
+                const shakeY = (Math.random() - 0.5) * screenShake.intensity;
+                context.translate(shakeX, shakeY);
+            }
 
             // Draw background
             const { bg1, bg2, star } = THEME_COLORS[theme];
@@ -113,6 +131,42 @@ export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasPr
                     context.fill();
                 });
             }
+
+            // Camera Transformation
+            context.save();
+
+            const lerp = (start: number, end: number, amt: number) => (1 - amt) * start + amt * end;
+
+            // Determine target camera state
+            let targetX = SCREEN_WIDTH / 2;
+            let targetY = SCREEN_HEIGHT / 2;
+            let targetZoom = 1.0;
+
+            if (isActionCamActive && cameraTarget) {
+                targetX = cameraTarget.x;
+                targetY = cameraTarget.y;
+                targetZoom = cameraTarget.zoom;
+            } else if (focusedStrandId !== null) {
+                const focused = strands.find(s => s.id === focusedStrandId);
+                if (focused) {
+                    targetX = focused.position.x;
+                    targetY = focused.position.y;
+                    targetZoom = 2.5;
+                }
+            }
+
+            // Lerp camera state for smooth transition
+            const camera = cameraRef.current;
+            const lerpAmount = 0.08;
+            camera.x = lerp(camera.x, targetX, lerpAmount);
+            camera.y = lerp(camera.y, targetY, lerpAmount);
+            camera.zoom = lerp(camera.zoom, targetZoom, lerpAmount);
+            
+            // Apply camera transformations
+            context.translate(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+            context.scale(camera.zoom, camera.zoom);
+            context.translate(-camera.x, -camera.y);
+
              // Draw Special Events
             specialEvents.forEach(event => {
                 context.save();
@@ -155,690 +209,377 @@ export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasPr
                 context.restore();
             });
 
-            // Draw Anomalies
-            anomalies.forEach(anomaly => {
+            // Draw Global Effects (before strands)
+            globalEffects.forEach(effect => {
+                const renderer = globalEffectRenderers[effect.type as keyof typeof globalEffectRenderers];
+                if(renderer) {
+                    (renderer as any)(context, effect, strands, now);
+                }
+            });
+
+            // Draw Player tool indicators
+            if (gameMode === 'PLAYER') {
                 context.save();
-                const pulse = 1 + 0.1 * Math.sin(now / (anomaly.type === 'STARDUST_MOTE' ? 100 : 300));
-                
-                if (anomaly.type === 'STARDUST_MOTE') {
-                    context.fillStyle = 'rgba(255, 255, 0, 0.8)';
-                    context.shadowColor = 'yellow';
-                    context.shadowBlur = 15;
+                context.globalAlpha = 0.5;
+                if (isGravityAnchorActive) {
+                    const radius = PLAYER_CONFIG.GRAVITY_ANCHOR.RADIUS;
+                    const gradient = context.createRadialGradient(mousePosition.x, mousePosition.y, 0, mousePosition.x, mousePosition.y, radius);
+                    gradient.addColorStop(0, 'rgba(139, 92, 246, 0.3)');
+                    gradient.addColorStop(1, 'rgba(139, 92, 246, 0)');
+                    context.fillStyle = gradient;
                     context.beginPath();
-                    context.arc(anomaly.position.x, anomaly.position.y, anomaly.radius * pulse, 0, Math.PI * 2);
+                    context.arc(mousePosition.x, mousePosition.y, radius, 0, Math.PI * 2);
                     context.fill();
-                } else if (anomaly.type === 'WHISPERING_CRYSTAL') {
-                    context.strokeStyle = 'rgba(200, 150, 255, 0.9)';
-                    context.fillStyle = 'rgba(200, 150, 255, 0.3)';
-                    context.shadowColor = '#d1b3ff';
-                    context.shadowBlur = 20;
+                } else if (activePlayerTool === 'REPEL') {
+                    context.strokeStyle = 'rgba(255, 255, 255, 0.5)';
                     context.lineWidth = 2;
                     context.beginPath();
-                    const size = anomaly.radius * pulse;
-                    for (let i = 0; i < 6; i++) {
-                         const angle = (i / 6) * 2 * Math.PI;
-                         const x = anomaly.position.x + Math.cos(angle) * size;
-                         const y = anomaly.position.y + Math.sin(angle) * size;
-                         if(i === 0) context.moveTo(x, y);
-                         else context.lineTo(x, y);
-                    }
-                    context.closePath();
+                    context.arc(mousePosition.x, mousePosition.y, PLAYER_CONFIG.REPEL.RADIUS, 0, Math.PI * 2);
                     context.stroke();
-                    context.fill();
+                } else if (activePlayerTool === 'CURRENT') {
+                     context.strokeStyle = 'rgba(0, 255, 255, 0.5)';
+                     context.lineWidth = 2;
+                     context.beginPath();
+                     context.arc(mousePosition.x, mousePosition.y, PLAYER_CONFIG.CURRENT.RADIUS, 0, Math.PI * 2);
+                     context.stroke();
+                } else if (activePlayerTool === 'WALL' && isDrawingWall && wallStartPos) {
+                     context.strokeStyle = 'rgba(255, 223, 0, 0.8)';
+                     context.lineWidth = 5;
+                     context.setLineDash([10, 5]);
+                     context.beginPath();
+                     context.moveTo(wallStartPos.x, wallStartPos.y);
+                     context.lineTo(mousePosition.x, mousePosition.y);
+                     context.stroke();
+                     context.setLineDash([]);
                 }
-                context.restore();
-            });
-            
-            // Draw Relationship Overlay
-            if (isRelationshipOverlayVisible) {
-                context.save();
-                context.lineWidth = 1;
-
-                for (let i = 0; i < strands.length; i++) {
-                    for (let j = i + 1; j < strands.length; j++) {
-                        const s1 = strands[i];
-                        const s2 = strands[j];
-
-                        if (!s1.visible || !s2.visible) continue;
-
-                        const level = relationshipMatrix[s1.name]?.[s2.name] ?? RelationshipLevel.Acquaintance;
-                        
-                        let shouldDraw = true;
-                        context.globalAlpha = 0.7;
-                        context.shadowBlur = 0;
-                        context.setLineDash([]);
-
-                        switch(level) {
-                            case RelationshipLevel.BestFriend:
-                                context.strokeStyle = 'gold';
-                                context.lineWidth = 3;
-                                context.shadowColor = 'gold';
-                                context.shadowBlur = 10;
-                                break;
-                            case RelationshipLevel.Ally:
-                                context.strokeStyle = '#FFFF99'; // Light Yellow
-                                context.lineWidth = 2;
-                                break;
-                            case RelationshipLevel.Friend:
-                                context.strokeStyle = '#87CEFA'; // Light Sky Blue
-                                context.lineWidth = 1.5;
-                                break;
-                            case RelationshipLevel.Acquaintance:
-                                context.strokeStyle = '#999999';
-                                context.lineWidth = 1;
-                                context.setLineDash([5, 10]);
-                                context.globalAlpha = 0.4;
-                                break;
-                            case RelationshipLevel.MortalEnemy:
-                                context.strokeStyle = '#FF4444';
-                                context.lineWidth = 2;
-                                context.setLineDash([8, 8]);
-                                break;
-                            default:
-                                shouldDraw = false;
-                        }
-
-                        if (shouldDraw) {
-                            context.beginPath();
-                            context.moveTo(s1.position.x, s1.position.y);
-                            context.lineTo(s2.position.x, s2.position.y);
-                            context.stroke();
-                        }
-                    }
-                }
-
                 context.restore();
             }
 
-
-            // Draw Active Ultimates
-            activeUltimates.forEach(ult => {
+            // Draw Anomalies
+            anomalies.forEach(anomaly => {
                 context.save();
-                const alpha = Math.max(0, ult.life / ult.maxLife);
-                context.globalAlpha = alpha;
-                
-                switch (ult.type) {
-                    case 'FISSURE':
-                        context.strokeStyle = ult.color;
-                        context.lineWidth = 20 * alpha;
-                        context.beginPath();
-                        context.arc(ult.position.x, ult.position.y, ult.radius, 0, 2 * Math.PI);
-                        context.stroke();
-                        break;
-                    case 'VITAL_BLOOM': {
-                        const bloomGradient = context.createRadialGradient(ult.position.x, ult.position.y, 0, ult.position.x, ult.position.y, ult.radius);
-                        const pulse = 0.8 + 0.2 * Math.sin(now / 200);
-                        bloomGradient.addColorStop(0, `rgba(150, 255, 150, ${0 * alpha * pulse})`);
-                        bloomGradient.addColorStop(0.8, `rgba(50, 220, 100, ${0.4 * alpha * pulse})`);
-                        bloomGradient.addColorStop(1, `rgba(0, 255, 120, ${0 * alpha * pulse})`);
-                        context.fillStyle = bloomGradient;
-                        context.beginPath();
-                        context.arc(ult.position.x, ult.position.y, ult.radius, 0, 2 * Math.PI);
-                        context.fill();
-                        break;
-                    }
-                    case 'REVELATION_FLARE': {
-                        const flareGradient = context.createRadialGradient(ult.position.x, ult.position.y, 0, ult.position.x, ult.position.y, ult.radius);
-                        flareGradient.addColorStop(0, `rgba(255, 255, 255, ${0.9 * alpha})`);
-                        flareGradient.addColorStop(1, `rgba(255, 255, 200, ${0 * alpha})`);
-                        context.fillStyle = flareGradient;
-                        context.beginPath();
-                        context.arc(ult.position.x, ult.position.y, ult.radius, 0, 2 * Math.PI);
-                        context.fill();
-                        break;
-                    }
-                    case 'GRAVITATIONAL_COLLAPSE': {
-                        const collapseGradient = context.createRadialGradient(ult.position.x, ult.position.y, 0, ult.position.x, ult.position.y, ult.maxRadius);
-                        collapseGradient.addColorStop(0, 'rgba(0,0,0,0.9)');
-                        collapseGradient.addColorStop(0.2, 'rgba(25,0,50,0.6)');
-                        collapseGradient.addColorStop(1, 'rgba(25,0,50,0)');
-                        context.fillStyle = collapseGradient;
-                        context.beginPath();
-                        context.arc(ult.position.x, ult.position.y, ult.maxRadius, 0, 2 * Math.PI);
-                        context.fill();
-                        break;
-                    }
-                    case 'EQUILIBRIUM_BURST':
-                        context.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
-                        context.fillRect(0,0, SCREEN_WIDTH, SCREEN_HEIGHT);
-                        break;
-                    case 'TRANQUILITY_NEXUS': {
-                        const nexusGradient = context.createRadialGradient(ult.position.x, ult.position.y, 0, ult.position.x, ult.position.y, ult.radius);
-                        const pulse = 0.9 + 0.1 * Math.sin(now / 400);
-                        nexusGradient.addColorStop(0, `rgba(100, 200, 255, ${0})`);
-                        nexusGradient.addColorStop(1, `rgba(100, 200, 255, ${0.3 * alpha * pulse})`);
-                        context.fillStyle = nexusGradient;
-                        context.beginPath();
-                        context.arc(ult.position.x, ult.position.y, ult.radius, 0, 2 * Math.PI);
-                        context.fill();
-                        break;
-                    }
-                    case 'EMPATHIC_RESONANCE_VISUAL': {
-                        const waveGradient = context.createRadialGradient(ult.position.x, ult.position.y, 0, ult.position.x, ult.position.y, ult.radius);
-                        waveGradient.addColorStop(0, `rgba(180, 111, 255, 0)`);
-                        waveGradient.addColorStop(0.9, `rgba(180, 111, 255, ${0.4 * alpha})`);
-                        waveGradient.addColorStop(1, `rgba(180, 111, 255, 0)`);
-                        context.fillStyle = waveGradient;
-                        context.beginPath();
-                        context.arc(ult.position.x, ult.position.y, ult.radius, 0, 2 * Math.PI);
-                        context.fill();
-                        break;
-                    }
-                     case 'BEACON_OF_KNOWLEDGE':
-                     case 'UNITY_PULSE': {
-                        const sourceStrand = strands.find(s => s.id === ult.sourceStrandId);
-                        if (!sourceStrand) break;
-                        context.strokeStyle = ult.color;
-                        context.lineWidth = 2 * alpha;
-                        ult.data?.participants?.forEach(id => {
-                            const target = strands.find(s => s.id === id);
-                            if(target) {
-                                context.beginPath();
-                                context.moveTo(sourceStrand.position.x, sourceStrand.position.y);
-                                context.lineTo(target.position.x, target.position.y);
-                                context.stroke();
-                            }
-                        });
-                        break;
-                    }
-                    case 'DUEL_ARENA':
-                        context.strokeStyle = ult.color;
-                        context.lineWidth = 10;
-                        context.shadowColor = 'red';
-                        context.shadowBlur = 20;
-                        context.beginPath();
-                        context.arc(ult.position.x, ult.position.y, ult.radius, 0, 2 * Math.PI);
-                        context.stroke();
-                        break;
-                    case 'DECREE_OF_NULL':
-                        context.strokeStyle = ult.color;
-                        context.lineWidth = 10;
-                        context.shadowColor = '#000000';
-                        context.shadowBlur = 20;
-                        context.beginPath();
-                        context.arc(ult.position.x, ult.position.y, ult.radius, 0, 2 * Math.PI);
-                        context.stroke();
-                        break;
+                const pulse = 1 + 0.2 * Math.sin(now / 200);
+                if (anomaly.type === 'STARDUST_MOTE') {
+                    context.fillStyle = `rgba(255, 223, 0, ${0.8 * pulse})`;
+                    context.shadowColor = 'gold';
+                    context.shadowBlur = 15;
+                } else if (anomaly.type === 'WHISPERING_CRYSTAL') {
+                     context.fillStyle = `rgba(219, 112, 219, ${0.9 * pulse})`;
+                     context.shadowColor = 'magenta';
+                     context.shadowBlur = 20;
                 }
-                
+                context.beginPath();
+                context.arc(anomaly.position.x, anomaly.position.y, anomaly.radius * pulse, 0, 2 * Math.PI);
+                context.fill();
                 context.restore();
             });
 
-            // Draw Job Effects
+            // Draw job effects (like ripples)
             jobEffects.forEach(effect => {
                 context.save();
-                const alpha = Math.max(0, effect.life / effect.maxLife);
-                context.globalAlpha = alpha;
-
+                const life = effect.life / effect.maxLife;
                 switch (effect.type) {
                     case 'RIPPLE':
-                        if (effect.data?.isDethapartPulse) {
-                            const pulseGradient = context.createRadialGradient(effect.position.x, effect.position.y, 0, effect.position.x, effect.position.y, effect.radius!);
-                            pulseGradient.addColorStop(0, `rgba(10, 0, 20, ${alpha * 0.9})`);
-                            pulseGradient.addColorStop(1, `rgba(10, 0, 20, 0)`);
-                            context.fillStyle = pulseGradient;
-                            context.beginPath();
-                            context.arc(effect.position.x, effect.position.y, effect.radius!, 0, 2 * Math.PI);
-                            context.fill();
-                        } else {
-                            context.strokeStyle = effect.color || 'rgba(255,255,255,0.5)';
-                            context.lineWidth = 3 * alpha;
-                            context.beginPath();
-                            context.arc(effect.position.x, effect.position.y, effect.radius!, 0, 2 * Math.PI);
-                            context.stroke();
-                        }
+                    case 'LIGHT_PULSE':
+                        context.strokeStyle = effect.color || 'white';
+                        context.lineWidth = 3 * life;
+                        context.globalAlpha = life;
+                        context.beginPath();
+                        context.arc(effect.position.x, effect.position.y, effect.radius! + (effect.maxRadius! - effect.radius!) * (1 - life), 0, Math.PI * 2);
+                        context.stroke();
                         break;
                     case 'EDGE_GLITCH':
-                        context.fillStyle = `rgba(200, 50, 255, ${0.3 + Math.random() * 0.4})`;
-                        const { width = 10, height = 100 } = effect.data || {};
-                        let { x, y } = effect.position;
-                        const glitchAmount = 30;
-                        if (x > SCREEN_WIDTH / 2) x -= width;
-                        if (y > SCREEN_HEIGHT / 2) y -= height;
-                        context.clearRect(x, y, width, height);
+                        context.fillStyle = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                        context.globalAlpha = life;
                         context.fillRect(
-                            x + (Math.random() - 0.5) * glitchAmount,
-                            y + (Math.random() - 0.5) * glitchAmount,
-                            width,
-                            height
+                            effect.position.x + (Math.random() - 0.5) * 10,
+                            effect.position.y + (Math.random() - 0.5) * 10,
+                            effect.data!.width!,
+                            effect.data!.height!
                         );
                         break;
+                     case 'ENERGY_TRAIL':
+                        context.fillStyle = effect.color || 'white';
+                        context.globalAlpha = life;
+                        context.beginPath();
+                        context.arc(effect.position.x, effect.position.y, effect.radius! * life, 0, Math.PI * 2);
+                        context.fill();
+                        break;
+                    case 'DREAM_DISTORTION':
+                        context.save();
+                        context.globalAlpha = life * 0.5;
+                        context.translate(effect.position.x, effect.position.y);
+                        context.scale(1 - life, 1 - life);
+                        context.rotate((1-life) * Math.PI);
+                        context.drawImage(canvas, -effect.position.x, -effect.position.y);
+                        context.restore();
+                        break;
+                    case 'GROUNDING_AURA':
+                        const auraPulse = 0.9 + 0.1 * Math.sin(now / 100);
+                        context.fillStyle = effect.color || 'white';
+                        context.globalAlpha = life * 0.2 * auraPulse;
+                        context.beginPath();
+                        context.arc(effect.position.x, effect.position.y, effect.radius! * auraPulse, 0, 2 * Math.PI);
+                        context.fill();
+                        break;
+                    case 'VOID_MOTE':
+                        context.fillStyle = effect.color || 'black';
+                        context.globalAlpha = life;
+                        context.beginPath();
+                        context.arc(effect.position.x, effect.position.y, effect.radius! * life, 0, 2*Math.PI);
+                        context.fill();
+                        break;
+                    case 'GRAVITY_WELL':
+                        const wellPulse = 0.95 + 0.05 * Math.sin(now / 200);
+                        const wellGradient = context.createRadialGradient(effect.position.x, effect.position.y, 0, effect.position.x, effect.position.y, effect.radius! * wellPulse);
+                        wellGradient.addColorStop(0, 'rgba(180, 180, 255, 0)');
+                        wellGradient.addColorStop(0.8, `rgba(180, 180, 255, ${0.1 * life})`);
+                        wellGradient.addColorStop(1, `rgba(180, 180, 255, ${0.3 * life})`);
+                        context.fillStyle = wellGradient;
+                        context.beginPath();
+                        context.arc(effect.position.x, effect.position.y, effect.radius! * wellPulse, 0, 2*Math.PI);
+                        context.fill();
+                        break;
+                    case 'JUDGEMENT_LINK':
+                    case 'EMPATHIC_LINK':
+                    case 'WEAVER_TETHER':
+                        const strand1 = strands.find(s => s.id === effect.data!.targetId);
+                        const strand2 = strands.find(s => s.id === effect.data!.target2Id || s.id === effect.data!.sourceId);
+                        if(strand1 && strand2) {
+                            context.strokeStyle = effect.color || 'white';
+                            context.lineWidth = 3 * life;
+                            context.globalAlpha = life;
+                            context.setLineDash([10, 5]);
+                            context.beginPath();
+                            context.moveTo(strand1.position.x, strand1.position.y);
+                            context.lineTo(strand2.position.x, strand2.position.y);
+                            context.stroke();
+                            context.setLineDash([]);
+                        }
+                        break;
+                }
+                context.restore();
+            });
+
+            // Draw Strands
+            strands.forEach(strand => {
+                if (!strand.visible) return;
+
+                context.save();
+                context.globalAlpha = strand.isDefeated ? 0.3 : 1;
+                
+                 if (strand.image) {
+                    context.save();
+                    context.beginPath();
+                    context.arc(strand.position.x, strand.position.y, strand.radius, 0, Math.PI * 2);
+                    context.clip();
+                    context.drawImage(strand.image, strand.position.x - strand.radius, strand.position.y - strand.radius, strand.radius * 2, strand.radius * 2);
+                    context.restore();
+                } else {
+                    const [r, g, b] = strand.color;
+                    context.fillStyle = `rgb(${r}, ${g}, ${b})`;
+                    context.beginPath();
+                    context.arc(strand.position.x, strand.position.y, strand.radius, 0, Math.PI * 2);
+                    context.fill();
+                }
+
+                // Low HP State Overlay
+                if (strand.isInLowHpState) {
+                    const pulse = 0.8 + 0.2 * Math.sin(now / 150);
+                    context.fillStyle = `rgba(255, 50, 50, ${0.3 * pulse})`;
+                    context.beginPath();
+                    context.arc(strand.position.x, strand.position.y, strand.radius, 0, Math.PI * 2);
+                    context.fill();
+                }
+
+                // Mood aura
+                if (strand.mood !== 'Neutral' && now < strand.moodEndTime) {
+                    context.strokeStyle = MOOD_COLORS[strand.mood];
+                    context.lineWidth = 4;
+                    context.beginPath();
+                    context.arc(strand.position.x, strand.position.y, strand.radius + 5, 0, Math.PI * 2);
+                    context.stroke();
+                }
+                
+                // Player Buffs/Debuffs Visuals
+                if (strand.playerBuffs) {
+                    strand.playerBuffs.forEach(buff => {
+                        if (buff.endTime > now) {
+                            context.save();
+                            const buffAlpha = Math.min(1, (buff.endTime - now) / 2000);
+                            context.globalAlpha = buffAlpha;
+                            if (buff.type === 'FAVOR') context.strokeStyle = 'gold';
+                            if (buff.type === 'STASIS') context.strokeStyle = 'cyan';
+                            if (buff.type === 'BURDEN') context.strokeStyle = 'maroon';
+                            context.lineWidth = 3;
+                            context.beginPath();
+                            context.arc(strand.position.x, strand.position.y, strand.radius + 3, 0, Math.PI * 2);
+                            context.stroke();
+                            context.restore();
+                        }
+                    });
+                }
+                
+                 // Glow effect
+                if (strand.glow > 0 || strand.glowColor) {
+                    context.shadowBlur = strand.glow * 15;
+                    const [r,g,b] = strand.glowColor ?? strand.color;
+                    context.shadowColor = `rgba(${r}, ${g}, ${b}, 0.8)`;
+                    // Redraw to apply shadow
+                    if (strand.image) {
+                         context.drawImage(strand.image, strand.position.x - strand.radius, strand.position.y - strand.radius, strand.radius * 2, strand.radius * 2);
+                    } else {
+                         context.beginPath();
+                         context.arc(strand.position.x, strand.position.y, strand.radius, 0, Math.PI * 2);
+                         context.fill();
+                    }
                 }
 
                 context.restore();
             });
 
-            // Draw particles
-            particleSystem.particles.forEach(p => {
-                context.globalAlpha = p.life / 100;
-                context.fillStyle = p.color;
-                context.beginPath();
-                context.arc(p.position.x, p.position.y, p.radius, 0, 2 * Math.PI);
-                context.fill();
-                context.globalAlpha = 1;
-            });
-
-            // Draw Player Walls
+            // Draw player walls
             playerWalls.forEach(wall => {
                 context.save();
-                const alpha = Math.max(0, (wall.endTime - now) / (PLAYER_CONFIG.WALL_OF_LIGHT.DURATION * 1000));
-                const wallGradient = context.createLinearGradient(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
-                wallGradient.addColorStop(0, `rgba(255, 255, 224, ${alpha * 0.8})`);
-                wallGradient.addColorStop(0.5, `rgba(255, 255, 255, ${alpha})`);
-                wallGradient.addColorStop(1, `rgba(255, 255, 224, ${alpha * 0.8})`);
-
-                context.strokeStyle = wallGradient;
+                const life = (wall.endTime - now) / (PLAYER_CONFIG.WALL_OF_LIGHT.DURATION * 1000);
+                const gradient = context.createLinearGradient(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
+                gradient.addColorStop(0, 'rgba(255, 223, 0, 0)');
+                gradient.addColorStop(0.5, `rgba(255, 223, 0, ${life})`);
+                gradient.addColorStop(1, 'rgba(255, 223, 0, 0)');
+                context.strokeStyle = gradient;
                 context.lineWidth = 10;
-                context.lineCap = 'round';
-                context.shadowColor = 'white';
-                context.shadowBlur = 20 * alpha;
-                
+                context.shadowColor = 'gold';
+                context.shadowBlur = 20 * life;
                 context.beginPath();
                 context.moveTo(wall.start.x, wall.start.y);
                 context.lineTo(wall.end.x, wall.end.y);
                 context.stroke();
                 context.restore();
             });
-            
-            // Draw strands
-            const colorShiftEvent = specialEvents.find(e => e.type === 'COLOR_SHIFT');
 
-            strands.forEach((strand, index) => {
-                if (!strand.visible) return;
-
-                context.save();
-                context.translate(strand.position.x, strand.position.y);
-                
-                // Player Buffs
-                strand.playerBuffs?.forEach(buff => {
-                    const now = Date.now();
-                    const config = PLAYER_CONFIG[buff.type];
-                    const alpha = (buff.endTime - now) / (config.DURATION * 1000);
-
-                    switch(buff.type) {
-                        case 'FAVOR': {
-                            context.beginPath();
-                            const pulse = 1 + 0.1 * Math.sin(now / 100);
-                            const favorGradient = context.createRadialGradient(0, 0, 0, 0, 0, (strand.radius + 10) * pulse);
-                            favorGradient.addColorStop(0, 'rgba(255, 215, 0, 0)');
-                            favorGradient.addColorStop(0.7, `rgba(255, 215, 0, ${0.5 * alpha})`);
-                            favorGradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
-                            context.fillStyle = favorGradient;
-                            context.arc(0, 0, (strand.radius + 10) * pulse, 0, Math.PI * 2);
-                            context.fill();
-                            break;
-                        }
-                        case 'STASIS': {
-                            context.fillStyle = `rgba(173, 216, 230, ${0.4 * alpha})`;
-                            context.strokeStyle = `rgba(255, 255, 255, ${0.8 * alpha})`;
-                            context.lineWidth = 2;
-                            context.beginPath();
-                            context.arc(0, 0, strand.radius, 0, Math.PI * 2);
-                            context.fill();
-                            context.stroke();
-                            // Cracks
-                            for (let i = 0; i < 3; i++) {
-                                context.beginPath();
-                                context.moveTo(Math.cos(i*2.1) * strand.radius * 0.5, Math.sin(i*2.1) * strand.radius * 0.5);
-                                context.lineTo(Math.cos(i*2.1 + 0.5) * strand.radius, Math.sin(i*2.1 + 0.5) * strand.radius);
-                                context.stroke();
-                            }
-                            break;
-                        }
-                        case 'BURDEN': {
-                            context.beginPath();
-                            const pulse = 1 + 0.05 * Math.sin(now/120);
-                            const burdenGradient = context.createRadialGradient(0, 0, 0, 0, 0, strand.radius * 1.5 * pulse);
-                            burdenGradient.addColorStop(0.6, 'rgba(50, 0, 80, 0)');
-                            burdenGradient.addColorStop(1, `rgba(50, 0, 80, ${0.6 * alpha})`);
-                            context.fillStyle = burdenGradient;
-                            context.arc(0, 0, strand.radius * 1.5 * pulse, 0, Math.PI * 2);
-                            context.fill();
-                            // Particles
-                            context.fillStyle = `rgba(80, 40, 120, ${alpha})`;
-                            const particleCount = 5;
-                            for (let i = 0; i < particleCount; i++) {
-                                const angle = (i/particleCount) * Math.PI * 2 + (now/800);
-                                const dist = strand.radius * 1.2;
-                                context.fillRect(Math.cos(angle) * dist, Math.sin(angle) * dist, 2, 2);
-                            }
-                            break;
-                        }
-                    }
-                });
-
-                // Draw Mark of Closure
-                if (strand.debuffs?.some(d => d.type === 'MARK_OF_CLOSURE')) {
-                    context.strokeStyle = `rgba(80, 70, 100, ${0.7 + 0.3 * Math.sin(now / 100)})`;
-                    context.lineWidth = 4;
-                    context.beginPath();
-                    context.arc(0, 0, strand.radius + 6, 0, Math.PI * 2);
-                    context.stroke();
+            // Draw Active Ultimates
+            activeUltimates.forEach(ult => {
+                const renderer = ultimateRenderers[ult.type as keyof typeof ultimateRenderers];
+                if(renderer) {
+                    (renderer as any)(context, ult, strands, now);
                 }
-
-                // Draw Mood Indicator
-                if (strand.mood !== 'Neutral') {
-                    context.fillStyle = MOOD_COLORS[strand.mood];
-                    context.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-                    context.lineWidth = 1;
-                    context.beginPath();
-                    context.arc(strand.radius - 8, -strand.radius + 8, 5, 0, 2 * Math.PI);
-                    context.fill();
-                    context.stroke();
-                }
-
-                // Custom Glow for DxD job
-                if (strand.glowColor) {
-                    context.beginPath();
-                    const glowGradient = context.createRadialGradient(0, 0, strand.radius, 0, 0, strand.radius + 20);
-                    const [r, g, b] = strand.glowColor;
-                    glowGradient.addColorStop(0, `rgba(${r},${g},${b}, 0.6)`);
-                    glowGradient.addColorStop(1, `rgba(${r},${g},${b}, 0)`);
-                    context.fillStyle = glowGradient;
-                    context.arc(0, 0, strand.radius + 20, 0, Math.PI * 2);
-                    context.fill();
-                }
-                
-                // Active Halo
-                if (index === activeStrandIndex && gameMode === 'BOT') {
-                    context.beginPath();
-                    const haloGradient = context.createRadialGradient(0, 0, strand.radius, 0, 0, strand.radius + 15);
-                    haloGradient.addColorStop(0, 'rgba(255, 215, 0, 0.5)');
-                    haloGradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
-                    context.fillStyle = haloGradient;
-                    context.arc(0, 0, strand.radius + 15, 0, Math.PI * 2);
-                    context.fill();
-                }
-
-                 // Idle effects
-                if (index !== activeStrandIndex) {
-                    if (strand.name === 'Vitarîs' && strand.jobState.pulseTimer) {
-                         const pulseSize = strand.radius * (1 + 0.08 * Math.sin(strand.jobState.pulseTimer));
-                         const pulseGradient = context.createRadialGradient(0, 0, 0, 0, 0, pulseSize);
-                         pulseGradient.addColorStop(0, `rgba(${strand.originalColor.join(',')}, 0.3)`);
-                         pulseGradient.addColorStop(1, `rgba(${strand.originalColor.join(',')}, 0)`);
-                         context.fillStyle = pulseGradient;
-                         context.beginPath();
-                         context.arc(0, 0, pulseSize, 0, 2 * Math.PI);
-                         context.fill();
-                    }
-                    if (strand.name === "Dræmin'") {
-                         context.filter = 'blur(1px)';
-                    }
-                }
-
-                // Dream Weave Effect
-                if (strand.temporaryState) {
-                    context.strokeStyle = `rgba(200, 100, 255, ${0.5 + 0.5 * Math.sin(now / 150)})`;
-                    context.lineWidth = 3;
-                    context.beginPath();
-                    context.arc(0, 0, strand.radius + 5, 0, Math.PI * 2);
-                    context.stroke();
-                }
-
-                if (strand.image) {
-                    if (colorShiftEvent && colorShiftEvent.data.hueShift !== undefined) {
-                        context.filter = `hue-rotate(${colorShiftEvent.data.hueShift}deg) brightness(1.2)`;
-                    }
-                     context.drawImage(strand.image, -strand.radius, -strand.radius, strand.radius * 2, strand.radius * 2);
-                } else {
-                    context.beginPath();
-                    context.arc(0, 0, strand.radius, 0, Math.PI * 2);
-                    let color = `rgb(${strand.color.join(',')})`;
-                     if (colorShiftEvent && colorShiftEvent.data.hueShift !== undefined) {
-                        color = `hsl(${colorShiftEvent.data.hueShift}, 80%, 70%)`;
-                    }
-                    context.fillStyle = color;
-                    context.fill();
-                    context.strokeStyle = `rgba(255,255,255,0.5)`;
-                    context.stroke();
-                }
-                
-                 if (index !== activeStrandIndex && strand.name === "Dræmin'") {
-                    context.filter = 'none';
-                }
-
-                context.restore();
             });
 
-            // Draw Explosion Effects
-            explosionEffects.forEach(effect => {
-                context.save();
-                const progress = 1 - (effect.life / effect.maxLife);
-
-                // 1. Expanding Shockwave
-                const shockwaveRadius = (50 + effect.intensity * 250) * progress;
-                const shockwaveAlpha = 1 - progress;
-                context.strokeStyle = `rgba(255, 255, 220, ${shockwaveAlpha * 0.8})`;
-                context.lineWidth = 1 + effect.intensity * 8;
-                context.beginPath();
-                context.arc(effect.position.x, effect.position.y, shockwaveRadius, 0, Math.PI * 2);
-                context.stroke();
-
-                // 2. Central Flash
-                const flashProgress = Math.min(1, progress * 4); // Flash happens in the first 25% of the effect's life
-                const flashAlpha = 1 - flashProgress;
-                const flashRadius = 30 + effect.intensity * 90;
-                
-                if (flashAlpha > 0) {
-                    const flashGradient = context.createRadialGradient(effect.position.x, effect.position.y, 0, effect.position.x, effect.position.y, flashRadius);
-                    flashGradient.addColorStop(0, `rgba(255, 255, 255, ${flashAlpha})`);
-                    flashGradient.addColorStop(0.5, `rgba(255, 255, 200, ${flashAlpha * 0.7})`);
-                    flashGradient.addColorStop(1, `rgba(255, 200, 100, 0)`);
-
-                    context.fillStyle = flashGradient;
-                    context.beginPath();
-                    context.arc(effect.position.x, effect.position.y, flashRadius, 0, Math.PI * 2);
-                    context.fill();
+            // Draw Transient VFX
+             transientVfx.forEach(vfx => {
+                const renderer = transientVfxRenderers[vfx.type as keyof typeof transientVfxRenderers];
+                if (renderer) {
+                    const target = strands.find(s => s.id === vfx.targetId);
+                    if (target) {
+                        (renderer as any)(context, target, vfx, now);
+                    }
                 }
-
-                context.restore();
             });
             
+            // Draw Relationship Overlay
+            if(isRelationshipOverlayVisible) {
+                context.save();
+                context.lineWidth = 2;
+                for (let i = 0; i < strands.length; i++) {
+                    for (let j = i + 1; j < strands.length; j++) {
+                        const s1 = strands[i];
+                        const s2 = strands[j];
+                        if(!s1.visible || !s2.visible) continue;
+
+                        const rel = relationshipMatrix[s1.name]?.[s2.name];
+                        if (rel === undefined) continue;
+
+                        let color = 'rgba(255, 255, 255, 0.1)';
+                        if (rel >= RelationshipLevel.Friend) color = `rgba(100, 255, 100, ${0.2 + (rel - RelationshipLevel.Friend)})`;
+                        if (rel <= RelationshipLevel.Acquaintance) color = `rgba(255, 100, 100, ${0.2 + Math.abs(rel)})`;
+
+                        context.strokeStyle = color;
+                        context.beginPath();
+                        context.moveTo(s1.position.x, s1.position.y);
+                        context.lineTo(s2.position.x, s2.position.y);
+                        context.stroke();
+                    }
+                }
+                context.restore();
+            }
+
             // Draw Collision VFX
             collisionVfx.forEach(vfx => {
                 context.save();
-                const progress = 1 - (vfx.life / vfx.maxLife);
-                const alpha = 1 - progress;
-                const size = 10 + vfx.intensity * 40;
+                const life = vfx.life / vfx.maxLife;
+                const radius = 10 + 40 * vfx.intensity * (1 - life);
+                let color = 'white';
+                if(vfx.type === 'damage') color = '255, 100, 100';
+                if(vfx.type === 'heal') color = '100, 255, 100';
+                if(vfx.type === 'crit') color = '255, 165, 0';
+                if(vfx.type === 'heal_blocked') color = '128, 0, 128';
 
-                switch (vfx.type) {
-                    case 'heal':
-                        context.strokeStyle = `rgba(50, 255, 100, ${alpha * 0.9})`;
-                        context.lineWidth = 2 + vfx.intensity * 4;
-                        context.beginPath();
-                        context.arc(vfx.position.x, vfx.position.y, size * progress, 0, Math.PI * 2);
-                        context.stroke();
-                        break;
-                    case 'neutral':
-                        context.strokeStyle = `rgba(200, 200, 200, ${alpha * 0.7})`;
-                        context.lineWidth = 1 + vfx.intensity * 2;
-                        context.beginPath();
-                        context.arc(vfx.position.x, vfx.position.y, size * progress * 0.5, 0, Math.PI * 2);
-                        context.stroke();
-                        break;
-                    case 'damage':
-                    case 'crit':
-                        context.strokeStyle = vfx.type === 'crit' ? `rgba(255, 165, 0, ${alpha})` : `rgba(255, 50, 50, ${alpha})`;
-                        context.lineWidth = vfx.type === 'crit' ? 3 + vfx.intensity * 4 : 2 + vfx.intensity * 3;
-                        const spikes = vfx.type === 'crit' ? 8 : 5;
-                        const rotation = progress * Math.PI;
-                        context.beginPath();
-                        for (let i = 0; i < spikes * 2; i++) {
-                            const radius = i % 2 === 0 ? size * (1 - progress) : size * 0.5 * (1 - progress);
-                            const angle = (i / (spikes * 2)) * Math.PI * 2 + rotation;
-                            const x = vfx.position.x + Math.cos(angle) * radius;
-                            const y = vfx.position.y + Math.sin(angle) * radius;
-                            if (i === 0) context.moveTo(x, y);
-                            else context.lineTo(x, y);
-                        }
-                        context.closePath();
-                        context.stroke();
-                        break;
-                }
-                context.restore();
-            });
+                const gradient = context.createRadialGradient(vfx.position.x, vfx.position.y, 0, vfx.position.x, vfx.position.y, radius);
+                gradient.addColorStop(0, `rgba(${color}, ${life * 0.8})`);
+                gradient.addColorStop(1, `rgba(${color}, 0)`);
 
-            // Draw Combat Text
-            combatTextEffects.forEach(effect => {
-                context.save();
-                const alpha = Math.min(1, (effect.life / effect.maxLife) * 2);
-                const isCrit = effect.color === 'orange';
-                const fontSize = isCrit ? 24 : 18;
-                context.font = `bold ${fontSize}px sans-serif`;
-                context.fillStyle = effect.color;
-                context.globalAlpha = alpha;
-                context.shadowColor = 'black';
-                context.shadowBlur = 4;
-                context.textAlign = 'center';
-                context.fillText(effect.text, effect.position.x, effect.position.y);
-                context.restore();
-            });
-
-
-            // Draw Winner Celebration
-            if (winner && !isVictoryScreenVisible) {
-                context.save();
-                context.translate(winner.position.x, winner.position.y);
-
-                const celebrationTime = now;
-                const pulse = 1 + 0.2 * Math.sin(celebrationTime / 150);
-                const rotation = (celebrationTime / 1000) * (Math.PI / 2);
-
-                // Pulsating golden halo
-                const haloGradient = context.createRadialGradient(0, 0, 0, 0, 0, winner.radius * 2 * pulse);
-                haloGradient.addColorStop(0, 'rgba(255, 223, 0, 0)');
-                haloGradient.addColorStop(0.7, 'rgba(255, 223, 0, 0.6)');
-                haloGradient.addColorStop(1, 'rgba(255, 223, 0, 0)');
-                context.fillStyle = haloGradient;
+                context.fillStyle = gradient;
                 context.beginPath();
-                context.arc(0, 0, winner.radius * 2 * pulse, 0, Math.PI * 2);
+                context.arc(vfx.position.x, vfx.position.y, radius, 0, 2 * Math.PI);
                 context.fill();
-
-                // Rotating sunbeams
-                context.strokeStyle = 'rgba(255, 255, 200, 0.7)';
-                context.lineWidth = 4;
-                context.shadowColor = 'white';
-                context.shadowBlur = 15;
-                for (let i = 0; i < 6; i++) {
-                    const angle = (i / 6) * Math.PI * 2 + rotation;
-                    context.beginPath();
-                    context.moveTo(Math.cos(angle) * (winner.radius + 10), Math.sin(angle) * (winner.radius + 10));
-                    context.lineTo(Math.cos(angle) * (winner.radius + 40), Math.sin(angle) * (winner.radius + 40));
-                    context.stroke();
-                }
-                
                 context.restore();
+            });
+
+            context.restore(); // Restore from camera transform
+
+             // Draw Sudden Death Vignette
+            if (now < suddenDeathEffectTime) {
+                const vignetteAlpha = (suddenDeathEffectTime - now) / 500;
+                const gradient = context.createRadialGradient(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, SCREEN_WIDTH/3, SCREEN_WIDTH/2, SCREEN_HEIGHT/2, SCREEN_WIDTH/1.5);
+                gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+                gradient.addColorStop(1, `rgba(150, 0, 0, ${vignetteAlpha * 0.8})`);
+                context.fillStyle = gradient;
+                context.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
             }
             
-            // Draw Player Mouse Interaction
-            if (gameMode === 'PLAYER' && mousePosition.x > 0) {
-                context.save();
-                
-                // Manage trail for Cosmic Current
-                mouseTrailRef.current.push({ ...mousePosition });
-                if (mouseTrailRef.current.length > 20) {
-                    mouseTrailRef.current.shift();
-                }
+            context.restore(); // Restore from screen shake
 
-                if (isGravityAnchorActive) {
-                    const config = PLAYER_CONFIG.GRAVITY_ANCHOR;
-                    const pulse = 1 + 0.1 * Math.sin(now / 100);
-                    const rotation = (now / 500) % (Math.PI * 2);
-                    
-                    const anchorGradient = context.createRadialGradient(mousePosition.x, mousePosition.y, 0, mousePosition.x, mousePosition.y, config.RADIUS * pulse);
-                    anchorGradient.addColorStop(0, 'rgba(180, 111, 255, 0)');
-                    anchorGradient.addColorStop(0.8, 'rgba(180, 111, 255, 0.5)');
-                    anchorGradient.addColorStop(1, 'rgba(180, 111, 255, 0)');
-                    context.fillStyle = anchorGradient;
-                    context.beginPath();
-                    context.arc(mousePosition.x, mousePosition.y, config.RADIUS * pulse, 0, Math.PI * 2);
-                    context.fill();
-
-                    context.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-                    context.lineWidth = 2;
-                    context.beginPath();
-                    for(let i=0; i < 3; i++) {
-                        const armAngle = i * (Math.PI * 2 / 3) + rotation;
-                        context.moveTo(mousePosition.x, mousePosition.y);
-                        context.quadraticCurveTo(
-                            mousePosition.x + Math.cos(armAngle - 0.5) * config.RADIUS * 0.6,
-                            mousePosition.y + Math.sin(armAngle - 0.5) * config.RADIUS * 0.6,
-                            mousePosition.x + Math.cos(armAngle) * config.RADIUS,
-                            mousePosition.y + Math.sin(armAngle) * config.RADIUS,
-                        );
-                    }
-                    context.stroke();
-
-                } else if (activePlayerTool === 'REPEL') {
-                    const pulse = 1 + 0.05 * Math.sin(now / 150);
-                    context.strokeStyle = `rgba(255, 255, 255, 0.3)`;
-                    context.lineWidth = 2;
-                    context.beginPath();
-                    context.arc(mousePosition.x, mousePosition.y, PLAYER_CONFIG.REPEL.RADIUS * pulse, 0, 2 * Math.PI);
-                    context.stroke();
-                } else if (activePlayerTool === 'CURRENT') {
-                    context.lineWidth = 3;
-                    context.lineCap = 'round';
-                    for (let i = mouseTrailRef.current.length - 1; i > 0; i--) {
-                        const p1 = mouseTrailRef.current[i];
-                        const p2 = mouseTrailRef.current[i-1];
-                        const alpha = i / mouseTrailRef.current.length;
-                        context.strokeStyle = `rgba(100, 200, 255, ${alpha * 0.5})`;
-                        context.beginPath();
-                        context.moveTo(p1.x, p1.y);
-                        context.lineTo(p2.x, p2.y);
-                        context.stroke();
-                    }
-                } else if (activePlayerTool === 'WALL' && isDrawingWall && wallStartPos) {
-                    context.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-                    context.lineWidth = 5;
-                    context.setLineDash([10, 10]);
-                    context.beginPath();
-                    context.moveTo(wallStartPos.x, wallStartPos.y);
-                    context.lineTo(mousePosition.x, mousePosition.y);
-                    context.stroke();
-                }
-                 context.restore();
-            } else {
-                 if (mouseTrailRef.current.length > 0) mouseTrailRef.current = [];
-            }
-
-            // Draw Sudden Death effect
-            if (now < suddenDeathEffectTime) {
-                const effectDuration = 500; // should match duration in useSimulation
-                const timeRemaining = suddenDeathEffectTime - now;
-                const peakTime = effectDuration * 0.2;
-                let alpha;
-                if (timeRemaining > effectDuration - peakTime) {
-                    alpha = 1 - (timeRemaining - (effectDuration - peakTime)) / peakTime;
-                } else {
-                    alpha = timeRemaining / (effectDuration - peakTime);
-                }
-                alpha = Math.max(0, Math.min(1, alpha));
-
-                context.save();
-                const vignetteGradient = context.createRadialGradient(
-                    SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, SCREEN_HEIGHT / 2,
-                    SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, SCREEN_WIDTH / 1.5
-                );
-                vignetteGradient.addColorStop(0, `rgba(255, 0, 0, ${alpha * 0.1})`);
-                vignetteGradient.addColorStop(1, `rgba(150, 0, 0, ${alpha * 0.6})`);
-
-                context.fillStyle = vignetteGradient;
+            // Draw Screen Flash
+            if (screenFlash && now < screenFlash.endTime) {
+                const flashAlpha = (screenFlash.endTime - now) / 200; // Assuming 200ms flash
+                context.fillStyle = screenFlash.color;
+                context.globalAlpha = flashAlpha;
                 context.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-                context.restore();
+                context.globalAlpha = 1.0;
             }
 
+            // Draw Combat Text
+            context.save();
+            context.textAlign = 'center';
+            context.shadowColor = 'black';
+            context.shadowBlur = 5;
+            combatTextEffects.forEach(text => {
+                const life = text.life / text.maxLife;
+                context.globalAlpha = life;
+                context.fillStyle = text.color;
+                context.font = `bold ${16 + 10 * (1 - life)}px sans-serif`;
+                context.fillText(text.text, text.position.x, text.position.y);
+            });
+            context.restore();
+            
             animationFrameId = requestAnimationFrame(render);
         };
 
-        render();
+        animationFrameId = requestAnimationFrame(render);
 
         return () => {
             cancelAnimationFrame(animationFrameId);
         };
-    }, [strands, activeStrandIndex, theme, particleSystem, activeUltimates, specialEvents, jobEffects, anomalies, explosionEffects, combatTextEffects, collisionVfx, playerWalls, winner, isVictoryScreenVisible, suddenDeathEffectTime, gameMode, mousePosition, activePlayerTool, isGravityAnchorActive, isDrawingWall, wallStartPos, isRelationshipOverlayVisible, relationshipMatrix]);
+    });
 
-    return <canvas ref={canvasRef} onClick={handleCanvasClick} onContextMenu={handleCanvasContextMenu} width={SCREEN_WIDTH} height={SCREEN_HEIGHT} className="absolute top-0 left-0 w-full h-full cursor-crosshair" />;
+    return (
+        <canvas
+            ref={canvasRef as React.RefObject<HTMLCanvasElement>}
+            width={SCREEN_WIDTH}
+            height={SCREEN_HEIGHT}
+            onClick={handleCanvasClick}
+            onContextMenu={handleCanvasContextMenu}
+            className="absolute top-0 left-0 w-full h-full"
+        />
+    );
 });

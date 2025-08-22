@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 const API_KEY = process.env.API_KEY;
@@ -54,5 +53,27 @@ export const getCrystalLore = async (): Promise<string> => {
     } catch (error) {
         console.error(`Error generating crystal lore:`, error);
         throw new Error("Failed to get lore from Gemini API.");
+    }
+};
+
+export const getFightCommentary = async (gameState: string): Promise<string> => {
+    if (!API_KEY) {
+        return "The Oracle is silent... (API key not configured).";
+    }
+
+    try {
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: gameState,
+            config: {
+                systemInstruction: "You are 'The Oracle,' the official AI commentator for the Astrisim combat arena. Your tone is analytical, excited, and slightly omniscient, like a professional esports caster mixed with a mystic. Provide short, impactful commentary (2-3 sentences) on the ongoing battle based on the data provided. Do not repeat the data given to you. Focus on the narrative and hype of the fight.",
+                temperature: 0.9,
+                topP: 0.95,
+            }
+        });
+        return response.text.trim();
+    } catch (error) {
+        console.error(`Error generating fight commentary:`, error);
+        throw new Error("Failed to get commentary from Gemini API.");
     }
 };

@@ -1,20 +1,12 @@
 import React, { useMemo } from 'react';
-import type { SimulationStats, RelationshipMatrix, StrandName, PlayerTool } from '../types';
+import type { SimulationStats, RelationshipMatrix, StrandName } from '../types';
 import { RelationshipLevel } from '../types';
-import { AnalyticsIcon, ChevronRightIcon, ChevronLeftIcon } from './Icons';
 import { STRAND_NAMES } from '../constants';
-
-interface AnalyticsTabProps {
-    isVisible: boolean;
-    onToggleVisibility: () => void;
-    stats: SimulationStats;
-    relationshipMatrix: RelationshipMatrix;
-}
 
 const StatCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div className="bg-white/5 p-3 rounded-lg">
         <h3 className="text-sm font-semibold text-purple-300 mb-2">{title}</h3>
-        <div className="space-y-1 text-gray-300 text-sm">{children}</div>
+        <div className="space-y-2 text-gray-300 text-sm">{children}</div>
     </div>
 );
 
@@ -25,8 +17,61 @@ const StatItem: React.FC<{ label: string; value: string | number }> = ({ label, 
     </div>
 );
 
+const StatBar: React.FC<{ value: number; max: number; color: string; label: string; }> = ({ value, max, color, label }) => {
+    const widthPercent = max > 0 ? (value / max) * 100 : 0;
+    return (
+        <div>
+            <div className="flex justify-between items-baseline mb-1">
+                <span className="text-xs text-gray-400">{label}</span>
+                <span className="text-xs font-mono font-semibold text-white">{typeof value === 'number' ? value.toFixed(1) + 's' : value}</span>
+            </div>
+            <div className="w-full bg-gray-900 rounded-full h-3 relative overflow-hidden border border-gray-700">
+                <div
+                    className={`h-full rounded-full transition-all duration-500 ease-out ${color}`}
+                    style={{ width: `${widthPercent}%` }}
+                ></div>
+            </div>
+        </div>
+    );
+};
 
-export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ isVisible, onToggleVisibility, stats, relationshipMatrix }) => {
+const BarChart: React.FC<{ data: [string, number][]; title: string; color: string }> = ({ data, title, color }) => {
+    if (data.length === 0) return null;
+    const maxValue = Math.max(1, ...data.map(d => d[1]));
+    return (
+        <StatCard title={title}>
+            <div className="space-y-2">
+                {data.sort((a,b) => b[1] - a[1]).slice(0, 5).map(([label, value]) => (
+                    <div key={label} className="grid grid-cols-3 items-center gap-2">
+                        <span className="text-xs text-gray-300 truncate col-span-1">{label}</span>
+                        <div className="col-span-2">
+                             <div className="w-full bg-gray-900 rounded-full h-4 relative overflow-hidden">
+                                <div
+                                    className={`h-full rounded-full ${color}`}
+                                    style={{ width: `${(value / maxValue) * 100}%` }}
+                                ></div>
+                                <span className="absolute inset-0 flex items-center justify-end pr-2 text-xs font-bold text-white/90">
+                                    {value}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </StatCard>
+    );
+};
+
+interface AnalyticsTabProps {
+    stats: SimulationStats;
+    relationshipMatrix: RelationshipMatrix;
+}
+
+export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ stats, relationshipMatrix }) => {
+
+    const ultimatesUsedArray = useMemo(() => Array.from(stats.ultimatesUsed.entries()), [stats.ultimatesUsed]);
+    const timeWithToolActiveArray = useMemo(() => Array.from(stats.player.timeWithToolActive.entries()), [stats.player.timeWithToolActive]);
+    const abilitiesUsedArray = useMemo(() => Array.from(stats.player.abilitiesUsed.entries()), [stats.player.abilitiesUsed]);
 
     const derivedStats = useMemo(() => {
         let alliances = 0;
@@ -57,23 +102,14 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ isVisible, onToggleV
             }
         }
         
-        const mostUsedUltimate = [...stats.totalUltimatesUsed.entries()].reduce((max, entry) => entry[1] > max[1] ? entry : max, [null, 0]);
-        
-        const mostUsedTool = [...stats.player.timeWithToolActive.entries()].reduce((max, entry) => entry[1] > max[1] ? entry : max, [null, 0]);
-        
-        const mostUsedAbility = [...stats.player.abilitiesUsed.entries()].reduce((max, entry) => entry[1] > max[1] ? entry : max, [null, 0]);
-
         return {
             alliances,
             rivalries,
             strongestBondName: strongestBond.names,
             fiercestRivalryName: fiercestRivalry.names,
-            mostUsedUltimateName: mostUsedUltimate[0] ?? 'N/A',
-            mostUsedUltimateCount: mostUsedUltimate[1],
-            mostUsedToolName: mostUsedTool[0] ?? 'N/A',
-            mostUsedAbilityName: mostUsedAbility[0] ?? 'N/A',
+            totalUltsUsed: ultimatesUsedArray.reduce((sum, entry) => sum + entry[1], 0),
         };
-    }, [relationshipMatrix, stats]);
+    }, [relationshipMatrix, ultimatesUsedArray]);
 
     const sessionDuration = useMemo(() => {
         const seconds = Math.floor((Date.now() - stats.sessionStartTime) / 1000);
@@ -81,58 +117,46 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ isVisible, onToggleV
         const sec = seconds % 60;
         return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
     }, [stats.sessionStartTime]);
+    
+    const totalToolTime = useMemo(() => {
+        return Math.max(1, timeWithToolActiveArray.reduce((sum, entry) => sum + entry[1], 0));
+    }, [timeWithToolActiveArray]);
 
 
     return (
-        <>
-            <button
-                onClick={onToggleVisibility}
-                className={`absolute top-1/2 -translate-y-1/2 right-4 z-20 p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all duration-300 shadow-lg ${isVisible ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-                aria-label="Expand Analytics Panel"
-            >
-                <AnalyticsIcon />
-            </button>
-            
-            <div className={`absolute top-0 right-0 h-full p-4 flex flex-col gap-4 bg-black/60 backdrop-blur-md text-white w-80 shadow-2xl overflow-y-auto transition-transform duration-300 ease-in-out z-10 ${isVisible ? 'translate-x-0' : '-translate-x-full'}`}>
-                <div className="flex-shrink-0 flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-purple-300">Session Analytics</h2>
-                     <button onClick={onToggleVisibility} className="p-2 rounded-full hover:bg-white/20 transition-colors" aria-label="Minimize Panel">
-                        <ChevronRightIcon />
-                    </button>
-                </div>
+        <div className="p-4 flex flex-col gap-4 bg-gray-900/80 backdrop-blur-lg text-white w-full shadow-2xl animate-fade-in border-2 border-purple-500/20 rounded-lg">
+            <div className="flex-shrink-0 text-center border-b-2 border-purple-500/20 pb-4">
+                <h2 className="text-2xl font-bold text-purple-300">Session Analytics</h2>
+                <p className="font-mono text-gray-400">Runtime: {sessionDuration}</p>
+            </div>
 
-                <StatCard title="Session Overview">
-                    <StatItem label="Runtime" value={sessionDuration} />
+            <div className="space-y-4 pr-2">
+                <StatCard title="Global Stats">
                     <StatItem label="Anomalies Collected" value={stats.anomaliesCollected} />
+                    <StatItem label="Total Collisions" value={stats.totalCollisions.toLocaleString()} />
+                    <StatItem label="Total Ultimates Used" value={derivedStats.totalUltsUsed} />
                 </StatCard>
+                
+                <BarChart data={ultimatesUsedArray} title="Ultimates Usage" color="bg-purple-500"/>
 
                 <StatCard title="Relationship Analysis">
-                    <StatItem label="Total Alliances" value={derivedStats.alliances} />
-                    <StatItem label="Total Rivalries" value={derivedStats.rivalries} />
-                     <div className="pt-1 mt-1 border-t border-white/10">
+                    <StatItem label="Active Alliances" value={derivedStats.alliances} />
+                    <StatItem label="Active Rivalries" value={derivedStats.rivalries} />
+                     <div className="pt-2 mt-2 border-t border-white/10 text-xs">
                          <StatItem label="Strongest Bond" value={derivedStats.strongestBondName} />
                          <StatItem label="Fiercest Rivalry" value={derivedStats.fiercestRivalryName} />
                     </div>
                 </StatCard>
+
+                <StatCard title="Player Mode: Tool Usage">
+                     <StatBar value={timeWithToolActiveArray.find(t=>t[0] === 'REPEL')?.[1] || 0} max={totalToolTime} color="bg-blue-500" label="Repel"/>
+                     <StatBar value={timeWithToolActiveArray.find(t=>t[0] === 'CURRENT')?.[1] || 0} max={totalToolTime} color="bg-cyan-500" label="Current"/>
+                     <StatItem label="Gravity Anchor Time" value={`${stats.player.gravityAnchorTime.toFixed(1)}s`} />
+                     <StatItem label="Aether Spent" value={Math.round(stats.player.aetherSpent).toLocaleString()} />
+                </StatCard>
                 
-                <StatCard title="Performance Metrics">
-                     <StatItem label="Total Collisions" value={stats.totalCollisions.toLocaleString()} />
-                     <StatItem label="Ultimates Used" value={[...stats.totalUltimatesUsed.values()].reduce((a,b) => a + b, 0)} />
-                     <div className="pt-1 mt-1 border-t border-white/10">
-                        <StatItem label="Most Active" value={`${derivedStats.mostUsedUltimateName} (${derivedStats.mostUsedUltimateCount})`} />
-                    </div>
-                </StatCard>
-
-                <StatCard title="Player Mode Stats">
-                    <StatItem label="Aether Spent" value={Math.round(stats.player.aetherSpent).toLocaleString()} />
-                    <StatItem label="Gravity Anchor Time" value={`${stats.player.gravityAnchorTime.toFixed(1)}s`} />
-                     <div className="pt-1 mt-1 border-t border-white/10">
-                        <StatItem label="Most Used Tool" value={derivedStats.mostUsedToolName} />
-                        <StatItem label="Most Used Ability" value={derivedStats.mostUsedAbilityName} />
-                    </div>
-                </StatCard>
-
+                 <BarChart data={abilitiesUsedArray} title="Player Mode: Abilities Used" color="bg-green-500"/>
             </div>
-        </>
+        </div>
     );
 };

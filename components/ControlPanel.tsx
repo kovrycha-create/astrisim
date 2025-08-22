@@ -1,147 +1,196 @@
-import React from 'react';
-import type { Strand, Theme, StrandName, LogEntry, GameMode } from '../types';
+
+import React, { useState } from 'react';
+import type { Strand, StrandName, Theme, LogEntry, GameMode } from '../types';
 import { StrandControl } from './StrandControl';
+import { GlobalControlsPanel } from './GlobalControlsPanel';
 import { Logger } from './Logger';
-import { PlayIcon, PauseIcon, SunIcon, MoonIcon, SparklesIcon, FightIcon, ChevronLeftIcon, ChevronRightIcon, ChartIcon, LinkIcon } from './Icons';
+import { CollapsibleSection } from './CollapsibleSection';
+import { CrosshairIcon, CameraIcon } from './Icons';
 
 interface ControlPanelProps {
-    isVisible: boolean;
-    onToggleVisibility: () => void;
     strands: Strand[];
     onStrandUpdate: (name: StrandName, updates: Partial<Strand>) => void;
     onTriggerUltimate: (strandId: number) => void;
-    isPaused: boolean;
-    onPauseToggle: () => void;
-    isFightModeActive: boolean;
-    onFightToggle: () => void;
-    onTriggerSuddenDeath: () => void;
-    onToggleAnalytics: () => void;
-    theme: Theme;
-    onThemeChange: (theme: Theme) => void;
-    logs: LogEntry[];
     onLearnMore: (strand: Strand) => void;
-    gameMode: GameMode;
-    onGameModeChange: (mode: GameMode) => void;
-    isRelationshipOverlayVisible: boolean;
-    onToggleRelationshipOverlay: () => void;
+    isFightModeActive: boolean;
+    onStrandOrderChange?: (strands: Strand[]) => void;
+    isFocusModeActive?: boolean;
+    onToggleFocusMode?: () => void;
+    onSetFocusedStrand?: (id: number | null) => void;
+    isActionCamActive?: boolean;
+    onToggleActionCam?: () => void;
+    // Props for the full control panel view (from controls.tsx)
+    isPaused?: boolean;
+    onPauseToggle?: () => void;
+    onFightToggle?: () => void;
+    onTriggerSuddenDeath?: () => void;
+    theme?: Theme;
+    onThemeChange?: (theme: Theme) => void;
+    logs?: LogEntry[];
+    gameMode?: GameMode;
+    onGameModeChange?: (mode: GameMode) => void;
+    isRelationshipOverlayVisible?: boolean;
+    onToggleRelationshipOverlay?: () => void;
+    sectionsVisibility?: {
+        globalControls: boolean;
+        strandManager: boolean;
+        eventLog: boolean;
+    };
+    onToggleSection?: (section: 'globalControls' | 'strandManager' | 'eventLog') => void;
 }
 
-export const ControlPanel: React.FC<ControlPanelProps> = ({
-    isVisible, onToggleVisibility, strands, onStrandUpdate, isPaused, onPauseToggle, theme, onThemeChange, logs, onLearnMore, onTriggerUltimate, isFightModeActive, onFightToggle, onTriggerSuddenDeath, onToggleAnalytics, gameMode, onGameModeChange, isRelationshipOverlayVisible, onToggleRelationshipOverlay
-}) => {
 
-    const isFightDisabled = gameMode === 'PLAYER';
+export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
+    const [draggingStrandId, setDraggingStrandId] = useState<number | null>(null);
+    const [dragOverStrandId, setDragOverStrandId] = useState<number | null>(null);
 
-    return (
-        <>
-            {/* Expand Button: shown when panel is not visible */}
-            <button
-                onClick={onToggleVisibility}
-                className={`absolute top-4 left-4 z-20 p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all duration-300 shadow-lg ${isVisible ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-                aria-label="Expand Panel"
-            >
-                <ChevronRightIcon />
-            </button>
-            
-            <div className={`absolute top-0 left-0 h-full p-4 flex flex-col gap-4 bg-black/60 backdrop-blur-md text-white w-96 shadow-2xl overflow-y-auto transition-transform duration-300 ease-in-out z-10 ${isVisible ? 'translate-x-0' : '-translate-x-full'}`}>
-                <div className="flex-shrink-0 flex justify-between items-center">
-                    <div>
-                        <h1 className="text-3xl font-bold text-purple-300">Astrisim</h1>
-                        <p className="text-gray-400">Live Wallpaper Simulation</p>
-                    </div>
-                    <button onClick={onToggleVisibility} className="p-2 rounded-full hover:bg-white/20 transition-colors" aria-label="Minimize Panel">
-                        <ChevronLeftIcon />
+    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, strandId: number) => {
+        setDraggingStrandId(strandId);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', strandId.toString());
+    };
+
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>, strandId: number) => {
+        e.preventDefault();
+        if (strandId !== dragOverStrandId) {
+            setDragOverStrandId(strandId);
+        }
+    };
+    
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+        setDragOverStrandId(null);
+    };
+
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>, dropTargetStrandId: number) => {
+        if (draggingStrandId === null || draggingStrandId === dropTargetStrandId) {
+            setDragOverStrandId(null);
+            setDraggingStrandId(null);
+            return;
+        }
+
+        const newStrandsOrder = [...props.strands];
+        const draggingIndex = newStrandsOrder.findIndex(s => s.id === draggingStrandId);
+        const dropIndex = newStrandsOrder.findIndex(s => s.id === dropTargetStrandId);
+
+        if (draggingIndex === -1 || dropIndex === -1) return;
+
+        const [draggedItem] = newStrandsOrder.splice(draggingIndex, 1);
+        newStrandsOrder.splice(dropIndex, 0, draggedItem);
+
+        props.onStrandOrderChange?.(newStrandsOrder);
+
+        setDragOverStrandId(null);
+        setDraggingStrandId(null);
+    };
+
+    const handleDragEnd = () => {
+        setDragOverStrandId(null);
+        setDraggingStrandId(null);
+    };
+
+
+    // Check if we are in the multi-window 'controls' context vs the main app context
+    if (!props.sectionsVisibility) {
+        // Render original Strand Manager for main App.tsx
+        return (
+            <div className="h-full flex flex-col gap-4 bg-gray-900/80 backdrop-blur-lg text-white w-full shadow-2xl overflow-y-hidden animate-fade-in border-2 border-purple-500/20 rounded-lg">
+                <div className="flex-shrink-0 flex items-center justify-between border-b-2 border-purple-500/20 pb-4 p-4">
+                     <button 
+                        onClick={props.onToggleActionCam}
+                        disabled={!props.isFightModeActive}
+                        title={!props.isFightModeActive ? "Only available during fights" : (props.isActionCamActive ? "Disable Action Cam" : "Enable Action Cam")}
+                        className={`p-2 rounded-full transition-colors ${props.isActionCamActive ? 'bg-purple-600' : 'bg-gray-700/50 hover:bg-purple-700'} ${!props.isFightModeActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                         <CameraIcon className="w-5 h-5" />
+                    </button>
+                    <h1 className="text-3xl font-bold text-purple-300 tracking-wider">Strand Manager</h1>
+                    <button 
+                        onClick={props.onToggleFocusMode}
+                        title={props.isFocusModeActive ? "Disable Focus Mode" : "Enable Focus Mode"}
+                        className={`p-2 rounded-full transition-colors ${props.isFocusModeActive ? 'bg-purple-600' : 'bg-gray-700/50 hover:bg-purple-700'}`}
+                    >
+                         <CrosshairIcon className="w-5 h-5" />
                     </button>
                 </div>
                 
-                {/* Status & Theme Controls */}
-                <div className="flex-shrink-0 p-3 bg-white/10 rounded-lg space-y-3">
-                    <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-2 p-1 bg-black/30 rounded-full">
-                            <button onClick={() => onGameModeChange('BOT')} className={`px-4 py-1 rounded-full text-sm ${gameMode === 'BOT' ? 'bg-purple-600' : 'hover:bg-white/20'}`}>Bot</button>
-                            <button onClick={() => onGameModeChange('PLAYER')} className={`px-4 py-1 rounded-full text-sm ${gameMode === 'PLAYER' ? 'bg-purple-600' : 'hover:bg-white/20'}`}>Player</button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                             <span className={`px-2 py-1 text-sm rounded ${isPaused ? 'bg-red-500' : 'bg-green-500'}`}>
-                                {isPaused ? 'PAUSED' : 'RUNNING'}
-                            </span>
-                            <button onClick={onPauseToggle} className="p-2 rounded-full hover:bg-white/20 transition-colors" aria-label={isPaused ? 'Play' : 'Pause'}>
-                                {isPaused ? <PlayIcon /> : <PauseIcon />}
-                            </button>
-                        </div>
-                    </div>
-                    <div className="flex items-center justify-center">
-                         <div className="flex items-center gap-1 p-1 bg-black/30 rounded-full">
-                            <button onClick={() => onThemeChange('day')} className={`p-2 rounded-full ${theme === 'day' ? 'bg-purple-500' : 'hover:bg-white/20'}`} aria-label="Day Theme"><SunIcon /></button>
-                            <button onClick={() => onThemeChange('night')} className={`p-2 rounded-full ${theme === 'night' ? 'bg-purple-500' : 'hover:bg-white/20'}`} aria-label="Night Theme"><MoonIcon /></button>
-                            <button onClick={() => onThemeChange('cosmic')} className={`p-2 rounded-full ${theme === 'cosmic' ? 'bg-purple-500' : 'hover:bg-white/20'}`} aria-label="Cosmic Theme"><SparklesIcon /></button>
-                            <div className="w-px h-6 bg-white/20 mx-1"></div>
-                            <button 
-                                onClick={onToggleRelationshipOverlay} 
-                                className={`p-2 rounded-full ${isRelationshipOverlayVisible ? 'bg-purple-500' : 'hover:bg-white/20'}`} 
-                                aria-label="Toggle Relationship Overlay"
-                                title="Toggle Relationship Overlay"
-                            >
-                                <LinkIcon />
-                            </button>
-                         </div>
-                    </div>
-                     <div className="mt-2 flex items-center gap-2" title={isFightDisabled ? 'Fight Mode is disabled in Player Mode' : ''}>
-                        <button 
-                            onClick={onFightToggle} 
-                            disabled={isFightDisabled}
-                            className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors ${
-                                isFightModeActive 
-                                ? 'bg-red-600 hover:bg-red-700 text-white flex-grow' 
-                                : 'bg-gray-600 hover:bg-gray-700 text-gray-200 w-full'
-                            } ${isFightDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            <FightIcon />
-                            {isFightModeActive ? 'Stop Fight' : 'Start Fight Mode'}
-                        </button>
-                        {isFightModeActive && !isFightDisabled && (
-                           <>
-                                <button
-                                    onClick={onTriggerSuddenDeath}
-                                    className="flex-shrink-0 px-3 py-2 text-sm font-bold rounded-lg transition-colors bg-orange-600 hover:bg-orange-700 text-white"
-                                    aria-label="Trigger Sudden Death"
-                                >
-                                    Sudden Death
-                                </button>
-                                <button
-                                    onClick={onToggleAnalytics}
-                                    className="p-2 rounded-lg transition-colors bg-blue-600 hover:bg-blue-700 text-white"
-                                    aria-label="Toggle Realtime Analytics"
-                                >
-                                    <ChartIcon />
-                                </button>
-                           </>
-                        )}
-                    </div>
-                </div>
-
-                {/* Strand Controls */}
-                <div className="flex-grow flex flex-col bg-white/10 rounded-lg p-3 min-h-0">
-                    <h2 className="text-xl font-semibold mb-2 flex-shrink-0">Strands</h2>
-                    <div className="overflow-y-auto flex-grow pr-2 space-y-2">
-                        {strands.map(strand => (
+                <div className="flex-grow flex flex-col min-h-0 px-4 pb-4">
+                    <div className="overflow-y-auto flex-grow pr-2 grid grid-cols-2 gap-2 content-start">
+                        {props.strands.map(strand => (
                             <StrandControl
                                 key={strand.id}
                                 strand={strand}
-                                onUpdate={onStrandUpdate}
-                                onLearnMore={onLearnMore}
-                                onTriggerUltimate={onTriggerUltimate}
-                                isFightModeActive={isFightModeActive}
+                                onUpdate={props.onStrandUpdate}
+                                onLearnMore={props.onLearnMore}
+                                onTriggerUltimate={props.onTriggerUltimate}
+                                isFightModeActive={props.isFightModeActive}
+                                onDragStart={(e) => handleDragStart(e, strand.id)}
+                                onDragOver={(e) => handleDragOver(e, strand.id)}
+                                onDrop={(e) => handleDrop(e, strand.id)}
+                                onDragEnd={handleDragEnd}
+                                onDragLeave={handleDragLeave}
+                                isDragging={draggingStrandId === strand.id}
+                                isDragOver={dragOverStrandId === strand.id && draggingStrandId !== strand.id}
+                                isFocusModeActive={props.isFocusModeActive}
+                                onSetFocusedStrand={props.onSetFocusedStrand}
                             />
                         ))}
                     </div>
                 </div>
-
-                {/* Logger */}
-                <div className="flex-shrink-0 bg-white/10 rounded-lg p-3 h-1/4">
-                    <Logger logs={logs} />
-                </div>
             </div>
-        </>
+        );
+    }
+
+    // Render new full control panel for controls.tsx
+    return (
+        <div className="h-full flex flex-col gap-4 bg-gray-900/80 backdrop-blur-lg text-white w-full shadow-2xl overflow-y-auto animate-fade-in border-2 border-purple-500/20 rounded-lg p-4 space-y-4">
+            <CollapsibleSection
+                title="Global Controls"
+                isOpen={props.sectionsVisibility.globalControls}
+                onToggle={() => props.onToggleSection!('globalControls')}
+            >
+                <GlobalControlsPanel
+                    isPaused={props.isPaused!}
+                    onPauseToggle={props.onPauseToggle!}
+                    isFightModeActive={props.isFightModeActive}
+                    onFightToggle={props.onFightToggle!}
+                    onTriggerSuddenDeath={props.onTriggerSuddenDeath!}
+                    theme={props.theme!}
+                    onThemeChange={props.onThemeChange!}
+                    gameMode={props.gameMode!}
+                    onGameModeChange={props.onGameModeChange!}
+                    isRelationshipOverlayVisible={props.isRelationshipOverlayVisible!}
+                    onToggleRelationshipOverlay={props.onToggleRelationshipOverlay!}
+                />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+                title="Strand Manager"
+                isOpen={props.sectionsVisibility.strandManager}
+                onToggle={() => props.onToggleSection!('strandManager')}
+            >
+                 <div className="space-y-2">
+                    {props.strands.map(strand => (
+                        <StrandControl
+                            key={strand.id}
+                            strand={strand}
+                            onUpdate={props.onStrandUpdate}
+                            onLearnMore={props.onLearnMore}
+                            onTriggerUltimate={props.onTriggerUltimate}
+                            isFightModeActive={props.isFightModeActive}
+                        />
+                    ))}
+                </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+                title="Event Log"
+                isOpen={props.sectionsVisibility.eventLog}
+                onToggle={() => props.onToggleSection!('eventLog')}
+            >
+                <div className="h-[300px]">
+                    <Logger logs={props.logs!} />
+                </div>
+            </CollapsibleSection>
+        </div>
     );
 };
