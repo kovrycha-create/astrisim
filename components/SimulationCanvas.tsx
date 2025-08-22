@@ -312,7 +312,7 @@ export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasPr
                         context.fillStyle = effect.color || 'white';
                         context.globalAlpha = life;
                         context.beginPath();
-                        context.arc(effect.position.x, effect.position.y, effect.radius! * life, 0, Math.PI * 2);
+                        context.arc(effect.position.x, effect.position.y, Math.max(0, effect.radius! * life), 0, Math.PI * 2);
                         context.fill();
                         break;
                     case 'DREAM_DISTORTION':
@@ -336,7 +336,7 @@ export const SimulationCanvas = forwardRef<HTMLCanvasElement, SimulationCanvasPr
                         context.fillStyle = effect.color || 'black';
                         context.globalAlpha = life;
                         context.beginPath();
-                        context.arc(effect.position.x, effect.position.y, effect.radius! * life, 0, 2*Math.PI);
+                        context.arc(effect.position.x, effect.position.y, Math.max(0, effect.radius! * life), 0, 2*Math.PI);
                         context.fill();
                         break;
                     case 'GRAVITY_WELL':

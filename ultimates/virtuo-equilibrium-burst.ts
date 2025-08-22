@@ -1,3 +1,4 @@
+
 import type { Strand, GlobalEffect, StrandName, Vector, RelationshipMatrix } from '../types';
 import { ULTIMATE_CONFIG, RELATIONSHIP_MODIFIERS } from '../constants';
 
@@ -127,7 +128,7 @@ export const renderEquilibriumBurst = (
     // Black Ring
     ctx.strokeStyle = `rgba(0, 0, 0, ${alpha * 0.8})`;
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius * 0.8 - ctx.lineWidth, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, Math.max(0, radius * 0.8 - ctx.lineWidth), 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.restore();

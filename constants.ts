@@ -1,3 +1,4 @@
+
 import type { StrandName, RelationshipMatrix, BoundaryType, AIAggression } from './types';
 import { RelationshipLevel } from './types';
 
@@ -296,18 +297,26 @@ export const CREATURE_CONFIG = {
                 name: 'Nit',
                 imageUrl: 'https://astrisim.neocities.org/creatures/nit/nit_evolve-1.png',
                 hp: 800,
-                speed: 1.2,
+                speed: 3.0,
+                acceleration: 0.025, // 3 / (2 * 60)
+                collisionDamageMultiplier: 0.5,
                 radius: 68,
                 size: { width: 135, height: 135 },
                 abilities: [{ name: 'Whisper Buffer', cooldownDuration: 6000 }],
                 evolutionThresholdTime: 20,
                 evolutionThresholdDebuffs: 3,
+                movement: {
+                    comfortDistance: { min: 300, max: 480 }, // 5-8 units * 60 pixels/unit (estimated)
+                    flinchDashSpeed: 1.5,
+                },
             },
             2: {
                 name: 'Nitelink',
                 imageUrl: 'https://astrisim.neocities.org/creatures/nit/nit_evolve-2.png',
                 hp: 1200,
-                speed: 1.2,
+                speed: 4.0,
+                acceleration: 0.083, // 4 / (0.8 * 60)
+                collisionDamageMultiplier: 1.0,
                 radius: 79,
                 size: { width: 158, height: 158 },
                 abilities: [
@@ -321,7 +330,9 @@ export const CREATURE_CONFIG = {
                 name: 'Nitrift',
                 imageUrl: 'https://astrisim.neocities.org/creatures/nit/nit_evolve-3.png',
                 hp: 1800,
-                speed: 1.4,
+                speed: 5.0,
+                acceleration: 0.208, // 5 / (0.4 * 60)
+                collisionDamageMultiplier: 1.5,
                 radius: 90,
                 size: { width: 180, height: 180 },
                 abilities: [
@@ -335,7 +346,9 @@ export const CREATURE_CONFIG = {
                 name: 'Nit Prime',
                 imageUrl: 'https://astrisim.neocities.org/creatures/nit/nit_evolve-4.png',
                 hp: 2500,
-                speed: 1.6,
+                speed: 4.5,
+                acceleration: 999, // Instant
+                collisionDamageMultiplier: 2.0,
                 radius: 101,
                 size: { width: 203, height: 203 },
                 abilities: [
@@ -351,7 +364,9 @@ export const CREATURE_CONFIG = {
             name: 'Bloom',
             imageUrl: 'https://astrisim.neocities.org/creatures/lifendeath/life.png',
             hp: 1600,
-            speed: 1.0,
+            speed: 3.0,
+            acceleration: 0.0167, // 3 / (3 * 60)
+            collisionDamageMultiplier: 0.7,
             radius: 90,
             size: { width: 191, height: 191 },
             abilities: [
@@ -364,7 +379,9 @@ export const CREATURE_CONFIG = {
             name: 'Wilt',
             imageUrl: 'https://astrisim.neocities.org/creatures/lifendeath/death.png',
             hp: 1600,
-            speed: 1.6,
+            speed: 5.5,
+            acceleration: 0.183, // 5.5 / (0.5 * 60)
+            collisionDamageMultiplier: 1.8,
             radius: 90,
             size: { width: 191, height: 191 },
             abilities: [

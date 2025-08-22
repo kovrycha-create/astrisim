@@ -1,3 +1,4 @@
+
 import type { ActiveUltimate, GlobalEffect, Strand, StrandName, Vector, TransientVfx, ActiveJobEffect, Creature } from '../types';
 import * as lotur from './lotur-tranquility-nexus';
 import * as vitaris from './vitaris-vital-bloom';
@@ -108,6 +109,7 @@ export const creatureVfxRenderers: { [key: string]: (ctx: CanvasRenderingContext
     'SYMPATHY_THREAD': creatureVfx.renderSympathyThread,
     'VERDANT_PULSE': creatureVfx.renderVerdantPulse,
     'EQUINOX_BURST': creatureVfx.renderEquinoxBurst,
+    'CREATURE_TRAIL': creatureVfx.renderCreatureTrail as any,
 };
 
 

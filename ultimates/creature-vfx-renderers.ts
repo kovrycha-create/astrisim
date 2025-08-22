@@ -94,7 +94,7 @@ export const renderEvolution = (ctx: CanvasRenderingContext2D, target: Creature,
         const x = target.position.x + Math.cos(angle) * dist;
         const y = target.position.y + Math.sin(angle) * dist - (100 * (1 - life));
         ctx.beginPath();
-        ctx.arc(x, y, 3 * life, 0, Math.PI * 2);
+        ctx.arc(x, y, Math.max(0, 3 * life), 0, Math.PI * 2);
         ctx.fill();
     }
 };
@@ -110,4 +110,13 @@ export const renderStanceSwitch = (ctx: CanvasRenderingContext2D, target: Creatu
     ctx.beginPath();
     ctx.arc(target.position.x, target.position.y, radius, 0, Math.PI * 2);
     ctx.stroke();
+};
+
+export const renderCreatureTrail = (ctx: CanvasRenderingContext2D, effect: ActiveJobEffect) => {
+    const life = effect.life / effect.maxLife;
+    ctx.fillStyle = effect.color || 'white';
+    ctx.globalAlpha = life;
+    ctx.beginPath();
+    ctx.arc(effect.position.x, effect.position.y, Math.max(0, effect.radius! * life), 0, Math.PI * 2);
+    ctx.fill();
 };

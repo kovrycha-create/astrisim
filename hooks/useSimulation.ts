@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Strand, Theme, LogEntry, StrandName, ParticleSystem, Particle, Vector, ActiveSpecialEvent, Anomaly, RelationshipMatrix, ExplosionEffect, BattleReportStats, FightHistoryData, GameMode, PlayerTool, PlayerWall, CombatTextEffect, CollisionVfx, ActiveJobEffect, SimulationStats, ActiveUltimate, GlobalEffect, TransientVfx, BoundaryType, AIAggression, FightSettings, CameraTarget, Creature, CreatureType } from '../types';
 import { STRAND_NAMES, STRAND_CONFIG, SCREEN_WIDTH, SCREEN_HEIGHT, RELATIONSHIP_MATRIX, ASSET_URLS, FIGHT_MODE_HEALTH, PLAYER_CONFIG, SPECIAL_EVENTS_CONFIG, ULTIMATE_CONFIG, STRAND_ULTIMATE_STATS, ANOMALY_CONFIG, SIMULATION_DEFAULTS, CREATURE_CONFIG } from '../constants';
@@ -456,6 +457,10 @@ Recent Events:
                     successfulTethers: 0,
                     successfulFractures: 0,
                     recursionGauge: 0,
+                    movementState: 'idling',
+                    movementTargetId: null,
+                    orbitAngle: Math.random() * Math.PI * 2,
+                    lastTrailTime: 0,
                 };
                 evolutionProgress = stage1Config.evolutionThresholdTime;
             } else if (type === 'BLOOM_WILT') {
@@ -467,6 +472,9 @@ Recent Events:
                     verdantPressure: 0,
                     hollowPressure: 0,
                     lastStanceSwitch: 0,
+                    movementState: 'drifting',
+                    movementTargetPosition: null,
+                    lastTrailTime: 0,
                 };
                 evolutionProgress = undefined;
             }
@@ -484,7 +492,7 @@ Recent Events:
                 type,
                 team,
                 position,
-                velocity: { x: (Math.random() - 0.5) * 2, y: (Math.random() - 0.5) * 2 },
+                velocity: { x: (Math.random() - 0.5) * 0.5, y: (Math.random() - 0.5) * 0.5 },
                 rotation: 0,
                 radius: baseConfig.radius,
                 size: baseConfig.size,
@@ -500,6 +508,8 @@ Recent Events:
                 abilities: baseConfig.abilities.map((a: any) => ({...a, lastUsed: 0})),
                 debuffs: [],
                 state: initialState,
+                acceleration: baseConfig.acceleration,
+                collisionDamageMultiplier: baseConfig.collisionDamageMultiplier,
             };
 
             return baseCreature;

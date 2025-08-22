@@ -32,6 +32,9 @@ export interface Creature {
     maxHealth: number;
     speed: number;
     isDefeated: boolean;
+    collisionDamageMultiplier: number;
+    acceleration: number;
+
     
     // Visuals
     image?: HTMLImageElement | null;
@@ -229,7 +232,7 @@ export interface ActiveSpecialEvent {
     };
 }
 
-export type JobEffectType = 'RIPPLE' | 'EDGE_GLITCH' | 'ENERGY_TRAIL' | 'DREAM_DISTORTION' | 'GROUNDING_AURA' | 'LIGHT_PULSE' | 'VOID_MOTE' | 'GRAVITY_WELL' | 'JUDGEMENT_LINK' | 'EMPATHIC_LINK' | 'WEAVER_TETHER' | 'WHISPER_BUFFER_FIELD' | 'HUSH_POOL' | 'SYMPATHY_THREAD' | 'FAULT_LINE' | 'TIME_BUBBLE' | 'VERDANT_PULSE' | 'GROWTH_ZONE' | 'VINE_WALL' | 'LIFE_FOUNTAIN' | 'DEATH_TRAIL' | 'DEATH_SIGIL' | 'ASH_GARDEN' | 'EQUINOX_BURST' | 'FORCED_SWITCH_VFX';
+export type JobEffectType = 'RIPPLE' | 'EDGE_GLITCH' | 'ENERGY_TRAIL' | 'DREAM_DISTORTION' | 'GROUNDING_AURA' | 'LIGHT_PULSE' | 'VOID_MOTE' | 'GRAVITY_WELL' | 'JUDGEMENT_LINK' | 'EMPATHIC_LINK' | 'WEAVER_TETHER' | 'WHISPER_BUFFER_FIELD' | 'HUSH_POOL' | 'SYMPATHY_THREAD' | 'FAULT_LINE' | 'TIME_BUBBLE' | 'VERDANT_PULSE' | 'GROWTH_ZONE' | 'VINE_WALL' | 'LIFE_FOUNTAIN' | 'DEATH_TRAIL' | 'DEATH_SIGIL' | 'ASH_GARDEN' | 'EQUINOX_BURST' | 'FORCED_SWITCH_VFX' | 'CREATURE_TRAIL';
 
 export interface ActiveJobEffect {
     id: number;
